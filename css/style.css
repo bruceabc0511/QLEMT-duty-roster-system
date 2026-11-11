@@ -612,6 +612,31 @@ main#appView {
   border-radius: 10px;
   overflow: hidden;
   background: #fff;
+  scroll-margin-top: 108px;
+}
+
+@keyframes todayGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(46, 139, 230, .75);
+  }
+  40% {
+    box-shadow: 0 0 0 8px rgba(46, 139, 230, .35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(46, 139, 230, 0);
+  }
+}
+
+.day.highlight-focus {
+  animation: todayGlow 1.2s ease-out;
+}
+
+.date-strip-wrap {
+  display: none;
+}
+
+.today-fab {
+  display: none;
 }
 
 .day.empty {
@@ -1418,6 +1443,139 @@ main#appView {
 
   .calendar-wrap {
     padding: 8px;
+    position: relative;
+  }
+
+  /* ---------- 手機版日期快選膠囊列 ---------- */
+  .date-strip-wrap {
+    display: flex;
+    position: sticky;
+    top: 48px;
+    z-index: 12;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    margin: -8px -8px 10px -8px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .date-strip-wrap::-webkit-scrollbar {
+    display: none;
+  }
+
+  .date-strip {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .date-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    height: 48px;
+    padding: 4px 6px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #F8FAFC;
+    color: var(--navy);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all .15s ease;
+    font-family: inherit;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .date-pill .pill-day {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .date-pill .pill-wd {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .date-pill.weekend .pill-wd {
+    color: #C0392B;
+  }
+
+  .date-pill.today {
+    border-color: #E74C3C;
+    color: #C0392B;
+    background: #FDF2E9;
+    font-weight: 800;
+  }
+
+  .date-pill.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(46, 139, 230, .4);
+  }
+
+  .date-pill.active .pill-wd {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .date-pill.has-mine {
+    position: relative;
+  }
+
+  .date-pill.has-mine::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #E67E22;
+  }
+
+  .date-pill.active.has-mine::after {
+    background: #FFF;
+  }
+
+  /* ---------- 回到今天浮動按鈕（FAB） ---------- */
+  .today-fab {
+    position: fixed;
+    right: 18px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    z-index: 25;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 4px 18px rgba(46, 139, 230, .48);
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity .2s ease, box-shadow .2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .today-fab:active {
+    transform: scale(0.92);
+  }
+
+  .today-fab.fab-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(18px) scale(0.85);
   }
 
   .cal-head,

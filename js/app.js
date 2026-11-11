@@ -214,6 +214,10 @@
     state.shiftsByDate.clear();
     state.lockedT2Set.clear();
     clearInterval(state.pollTimer);
+    if (dayObserver) { dayObserver.disconnect(); dayObserver = null; }
+    if (todayObserver) { todayObserver.disconnect(); todayObserver = null; }
+    const fab = $('#todayFab');
+    if (fab) fab.classList.add('hidden');
     document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
     initLogin();
   }
@@ -275,6 +279,9 @@
     setDashboardCollapsed(isMobile);
 
     await loadMonth();
+    if (window.innerWidth <= 760) {
+      setTimeout(() => scrollToToday({ smooth: false, highlight: true }), 120);
+    }
     clearInterval(state.pollTimer);
     state.pollTimer = setInterval(() => {
       if (!document.hidden && !isPastMonth(state.year, state.month)) loadMonth(true);
@@ -354,6 +361,9 @@
 
     renderCalendar();
     renderStats();
+    renderDateStrip();
+    setupDayObserver();
+    setupTodayObserver();
   }
 
   function renderCalendar() {
@@ -416,7 +426,7 @@
         const lockBtn = adm
           ? `<button type="button" class="t2-lock-toggle ${locked2 ? 'locked' : ''}" data-lock-date="${date}" title="點擊切換當日二車開放/鎖定">${locked2 ? '🔒二車' : '🔓二車'}</button>`
           : (locked2 ? `<span class="t2-lock-toggle locked" title="本日二車未開放">🔒二車</span>` : '');
-        html += `<div class="${cls}">
+        html += `<div class="${cls}" id="day-${date}" data-day-date="${date}">
           <div class="day-head">
             <span><span class="day-num">${dayNum}</span>${isTrain ? '<span class="day-training">(定訓)</span>' : ''}<span class="day-wd">星期${WD[d]}</span></span>
             <span class="day-head-right">${lockBtn}<span class="badge ${t1n >= CFG.REQUIRED_T1_PER_DAY ? 'full' : ''}" title="一車已排 / 應排">${t1n}/${CFG.REQUIRED_T1_PER_DAY}</span></span>
@@ -472,22 +482,145 @@
     }).join('');
   }
 
+  // ---------------- 手機版：日期快選膠囊、滾動定位與 FAB ----------------
+  let dayObserver = null;
+  let todayObserver = null;
+
+  function renderDateStrip() {
+    const wrap = $('#dateStripWrap');
+    if (!wrap) return;
+    const { year, month } = state;
+    const days = new Date(year, month, 0).getDate();
+    const today = todayStr();
+    const me = state.session ? state.session.name : '';
+    let html = '';
+    for (let d = 1; d <= days; d++) {
+      const date = `${year}-${pad(month)}-${pad(d)}`;
+      const dowIdx = new Date(year, month - 1, d).getDay();
+      const dow = WD[dowIdx];
+      const isToday = date === today;
+      const isWeekend = dowIdx === 0 || dowIdx === 6;
+      const hasMine = (state.shiftsByDate.get(date) || []).some(s => s.name === me);
+      html += `<button type="button" class="date-pill ${isToday ? 'today' : ''} ${isWeekend ? 'weekend' : ''} ${hasMine ? 'has-mine' : ''}" data-pill-date="${date}" title="${year - 1911}年${month}月${d}日（星期${dow}）">
+        <span class="pill-day">${d}</span>
+        <span class="pill-wd">週${dow}</span>
+      </button>`;
+    }
+    $('#dateStrip').innerHTML = html;
+  }
+
+  function scrollToDate(dateStr, { smooth = true, highlight = true } = {}) {
+    const el = document.getElementById('day-' + dateStr);
+    if (!el) return false;
+    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+    if (highlight) {
+      el.classList.remove('highlight-focus');
+      void el.offsetWidth;
+      el.classList.add('highlight-focus');
+    }
+    document.querySelectorAll('.date-pill').forEach(p => {
+      const isTarget = p.dataset.pillDate === dateStr;
+      p.classList.toggle('active', isTarget);
+      if (isTarget) {
+        p.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    });
+    return true;
+  }
+
+  function scrollToToday({ smooth = true, highlight = true } = {}) {
+    const tStr = todayStr();
+    const [ty, tm] = tStr.split('-').map(Number);
+    if (state.year === ty && state.month === tm) {
+      scrollToDate(tStr, { smooth, highlight });
+    } else {
+      switchToMonth(ty, tm, { autoScroll: 'today', smoothScroll: smooth });
+    }
+  }
+
+  function setupDayObserver() {
+    if (dayObserver) dayObserver.disconnect();
+    if (window.innerWidth > 760 || typeof IntersectionObserver === 'undefined') return;
+    dayObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const d = entry.target.dataset.dayDate;
+          document.querySelectorAll('.date-pill').forEach(p => {
+            p.classList.toggle('active', p.dataset.pillDate === d);
+          });
+          const activePill = document.querySelector(`.date-pill[data-pill-date="${d}"]`);
+          if (activePill) activePill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+      });
+    }, { rootMargin: '-60px 0px -75% 0px', threshold: 0 });
+    document.querySelectorAll('.day[data-day-date]').forEach(el => dayObserver.observe(el));
+  }
+
+  function setupTodayObserver() {
+    if (todayObserver) todayObserver.disconnect();
+    const fab = $('#todayFab');
+    if (!fab) return;
+    if (!state.session || window.innerWidth > 760) {
+      fab.classList.add('hidden');
+      return;
+    }
+    fab.classList.remove('hidden');
+    const todayEl = document.querySelector('.day.today');
+    if (!todayEl) {
+      fab.classList.remove('fab-hidden');
+      return;
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      fab.classList.remove('fab-hidden');
+      return;
+    }
+    todayObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        fab.classList.toggle('fab-hidden', entry.isIntersecting);
+      });
+    }, { threshold: 0.1 });
+    todayObserver.observe(todayEl);
+  }
+
+  $('#dateStrip').addEventListener('click', e => {
+    const b = e.target.closest('[data-pill-date]');
+    if (!b) return;
+    scrollToDate(b.dataset.pillDate, { smooth: true, highlight: true });
+  });
+
+  const fabEl = $('#todayFab');
+  if (fabEl) {
+    fabEl.addEventListener('click', () => scrollToToday({ smooth: true, highlight: true }));
+  }
+
   // ---------------- 月份切換 ----------------
-  function switchToMonth(year, month) {
+  function switchToMonth(year, month, { autoScroll = 'smart', smoothScroll = true } = {}) {
     state.year = year;
     state.month = month;
     const ym = `${year}-${pad(month)}`;
     const cached = state.monthCache.get(ym);
+    const afterRender = () => {
+      if (window.innerWidth <= 760) {
+        const tStr = todayStr();
+        const [ty, tm] = tStr.split('-').map(Number);
+        if (autoScroll === 'today' || (autoScroll === 'smart' && year === ty && month === tm)) {
+          setTimeout(() => scrollToDate(tStr, { smooth: smoothScroll, highlight: true }), 80);
+        } else if (autoScroll === 'smart') {
+          setTimeout(() => scrollToDate(`${year}-${pad(month)}-01`, { smooth: smoothScroll, highlight: false }), 80);
+        }
+      }
+    };
     if (cached) {
       state.data = cached;
       rebuildIndexes(cached);
       render();
+      afterRender();
       loadMonth(true);
     } else {
       state.data = { shifts: [], lockedT2Dates: [], members: state.data.members, sheetUrl: '' };
       rebuildIndexes(state.data);
       $('#monthLabel').textContent = `${year - 1911}年${month}月（${year}）`;
-      loadMonth(false);
+      loadMonth(false).then(() => afterRender());
     }
   }
   function shiftMonth(delta) {
@@ -496,7 +629,7 @@
   }
   $('#prevMonth').onclick = () => shiftMonth(-1);
   $('#nextMonth').onclick = () => shiftMonth(1);
-  $('#todayBtn').onclick = () => { const t = new Date(); switchToMonth(t.getFullYear(), t.getMonth() + 1); };
+  $('#todayBtn').onclick = () => { const t = new Date(); switchToMonth(t.getFullYear(), t.getMonth() + 1, { autoScroll: 'today' }); };
   $('#refreshBtn').onclick = () => loadMonth(false, { force: true });
 
   // ---------------- 二車鎖定管理（預設全部鎖定） ----------------

@@ -121,6 +121,9 @@
 
     <div class="layout">
       <section class="calendar-wrap card">
+        <div class="date-strip-wrap" id="dateStripWrap">
+          <div class="date-strip" id="dateStrip"></div>
+        </div>
         <div class="calendar" id="calendar"></div>
       </section>
       <aside class="card side">
@@ -251,6 +254,10 @@
     </div>
   </div>
 
+  <button type="button" class="today-fab hidden" id="todayFab" title="回到今天" aria-label="回到今天">
+    <span class="today-fab-icon">🎯</span>
+    <span class="today-fab-text">今天</span>
+  </button>
   <div class="toast-wrap" id="toastWrap"></div>
   <div class="loading hidden" id="loading">
     <div class="spinner"></div>
