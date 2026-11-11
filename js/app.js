@@ -26,6 +26,10 @@
     year: now.getFullYear(),
     month: now.getMonth() + 1,
     data: { shifts: [], lockedT2Dates: [], members: [], sheetUrl: '' },
+    shiftsByDate: new Map(),
+    lockedT2Set: new Set(),
+    monthCache: new Map(),
+    lastSyncAt: 0,
     modal: null,          // { date, editing, tier, selections: [{tier, start}], targetName }
     pollTimer: null,
     busy: false,
@@ -126,7 +130,21 @@
     return d === firstWednesdayDay(y, m);
   }
   function isT2Locked(dateStr) {
-    return (state.data.lockedT2Dates || []).includes(dateStr);
+    return state.lockedT2Set.has(dateStr);
+  }
+  function isPastMonth(year, month) {
+    const t = new Date();
+    return year < t.getFullYear() || (year === t.getFullYear() && month < t.getMonth() + 1);
+  }
+  function rebuildIndexes(data) {
+    const byDate = new Map();
+    (data.shifts || []).forEach(s => {
+      let arr = byDate.get(s.date);
+      if (!arr) { arr = []; byDate.set(s.date, arr); }
+      arr.push(s);
+    });
+    state.shiftsByDate = byDate;
+    state.lockedT2Set = new Set(data.lockedT2Dates || []);
   }
 
   function toast(msg, type = '') {
@@ -192,6 +210,9 @@
   function logout() {
     sessionStorage.removeItem(SESSION_KEY);
     state.session = null;
+    state.monthCache.clear();
+    state.shiftsByDate.clear();
+    state.lockedT2Set.clear();
     clearInterval(state.pollTimer);
     document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
     initLogin();
@@ -255,8 +276,16 @@
 
     await loadMonth();
     clearInterval(state.pollTimer);
-    state.pollTimer = setInterval(() => { if (!document.hidden) loadMonth(true); }, CFG.POLL_SECONDS * 1000);
+    state.pollTimer = setInterval(() => {
+      if (!document.hidden && !isPastMonth(state.year, state.month)) loadMonth(true);
+    }, CFG.POLL_SECONDS * 1000);
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.session && !isPastMonth(state.year, state.month)) {
+      if (Date.now() - state.lastSyncAt >= CFG.POLL_SECONDS * 1000) loadMonth(true);
+    }
+  });
 
   function allMonthDatesWithMarker(year, month) {
     const days = new Date(year, month, 0).getDate();
@@ -266,28 +295,46 @@
     return list;
   }
 
-  async function loadMonth(silent = false) {
+  function applyMonthData(d) {
+    d.lockedT2Dates = d.lockedT2Dates || [];
+    const marker = `${d.year}-${pad(d.month)}-00`;
+    if (!d.lockedT2Dates.includes(marker)) {
+      d.lockedT2Dates = allMonthDatesWithMarker(d.year, d.month);
+    }
+    const ym = `${d.year}-${pad(d.month)}`;
+    state.monthCache.set(ym, d);
+    if (d.year !== state.year || d.month !== state.month) return;
+    state.data = d;
+    rebuildIndexes(d);
+    state.lastSyncAt = Date.now();
+    $('#syncText').textContent = '最後更新 ' + new Date().toLocaleTimeString('zh-TW', { hour12: false });
+    render();
+    if (state.modal) renderModal();
+    if (!$('#t2Modal').classList.contains('hidden')) renderT2Modal();
+  }
+
+  async function loadMonth(silent = false, { force = false } = {}) {
+    const reqYear = state.year, reqMonth = state.month;
+    const ym = `${reqYear}-${pad(reqMonth)}`;
+    const cached = !force ? state.monthCache.get(ym) : null;
     try {
-      const d = await call('getMonth', { year: state.year, month: state.month }, { silent });
+      const d = await call('getMonth', {
+        year: reqYear,
+        month: reqMonth,
+        version: cached && cached.version ? cached.version : undefined,
+        force: force || undefined,
+      }, { silent });
       if (d.year !== state.year || d.month !== state.month) return;  // 使用者已切換月份
-      d.lockedT2Dates = d.lockedT2Dates || [];
-      const marker = `${d.year}-${pad(d.month)}-00`;
-      if (!d.lockedT2Dates.includes(marker)) {
-        // 該月份尚未初始化：預設將全月二車時段設為全部鎖定
-        d.lockedT2Dates = allMonthDatesWithMarker(d.year, d.month);
-        if (isAdmin()) {
-          call('setTier2Lock', { dates: d.lockedT2Dates, locked: true }, { silent: true }).catch(() => { });
-        }
+      if (d.unchanged) {
+        state.lastSyncAt = Date.now();
+        $('#syncText').textContent = '最後更新 ' + new Date().toLocaleTimeString('zh-TW', { hour12: false });
+        return;
       }
-      state.data = d;
-      $('#syncText').textContent = '最後更新 ' + new Date().toLocaleTimeString('zh-TW', { hour12: false });
-      render();
-      if (state.modal) renderModal();
-      if (!$('#t2Modal').classList.contains('hidden')) renderT2Modal();
+      applyMonthData(d);
     } catch (e) { if (!silent) toast(e.message, 'err'); }
   }
 
-  function shiftsOn(date) { return state.data.shifts.filter(s => s.date === date); }
+  function shiftsOn(date) { return state.shiftsByDate.get(date) || []; }
 
   function render() {
     const { year, month } = state;
@@ -391,7 +438,8 @@
     let gap = 0;
     for (let d = 1; d <= days; d++) {
       const date = `${year}-${pad(month)}-${pad(d)}`;
-      gap += Math.max(0, CFG.REQUIRED_T1_PER_DAY - t1.filter(s => s.date === date).length);
+      const dayT1 = (state.shiftsByDate.get(date) || []).reduce((acc, s) => acc + (s.tier === 1 ? 1 : 0), 0);
+      gap += Math.max(0, CFG.REQUIRED_T1_PER_DAY - dayT1);
     }
     $('#rateCard').classList.toggle('reached', reached);
     const gb = $('#goalBadge');
@@ -403,7 +451,7 @@
     $('#gapValue').textContent = gap;
     $('#gapSub').textContent = gap ? '尚有空班，請踴躍登記' : '本月一車已全數排滿 🎉';
     $('#t2Value').textContent = shifts.length - t1.length;
-    const lockedCount = (state.data.lockedT2Dates || []).filter(x => !x.endsWith('-00')).length;
+    const lockedCount = Math.max(0, state.lockedT2Set.size - (state.lockedT2Set.has(`${year}-${pad(month)}-00`) ? 1 : 0));
     const openT2Count = Math.max(0, days - lockedCount);
     $('#t2Sub').textContent = openT2Count ? `不列入排班率（本月開放 ${openT2Count} 天）` : '不列入排班率（預設全月鎖定）';
     const me = state.session.name;
@@ -425,35 +473,51 @@
   }
 
   // ---------------- 月份切換 ----------------
+  function switchToMonth(year, month) {
+    state.year = year;
+    state.month = month;
+    const ym = `${year}-${pad(month)}`;
+    const cached = state.monthCache.get(ym);
+    if (cached) {
+      state.data = cached;
+      rebuildIndexes(cached);
+      render();
+      loadMonth(true);
+    } else {
+      state.data = { shifts: [], lockedT2Dates: [], members: state.data.members, sheetUrl: '' };
+      rebuildIndexes(state.data);
+      $('#monthLabel').textContent = `${year - 1911}年${month}月（${year}）`;
+      loadMonth(false);
+    }
+  }
   function shiftMonth(delta) {
     const d = new Date(state.year, state.month - 1 + delta, 1);
-    state.year = d.getFullYear(); state.month = d.getMonth() + 1;
-    state.data = { shifts: [], lockedT2Dates: [], members: state.data.members, sheetUrl: '' };
-    render();
-    loadMonth();
+    switchToMonth(d.getFullYear(), d.getMonth() + 1);
   }
   $('#prevMonth').onclick = () => shiftMonth(-1);
   $('#nextMonth').onclick = () => shiftMonth(1);
-  $('#todayBtn').onclick = () => { const t = new Date(); state.year = t.getFullYear(); state.month = t.getMonth() + 1; render(); loadMonth(); };
-  $('#refreshBtn').onclick = () => loadMonth();
+  $('#todayBtn').onclick = () => { const t = new Date(); switchToMonth(t.getFullYear(), t.getMonth() + 1); };
+  $('#refreshBtn').onclick = () => loadMonth(false, { force: true });
 
   // ---------------- 二車鎖定管理（預設全部鎖定） ----------------
   async function toggleT2DateLock(date, locked) {
     try {
       const [y, m] = date.split('-').map(Number);
       const marker = `${y}-${pad(m)}-00`;
-      if (!locked && !(state.data.lockedT2Dates || []).includes(marker)) {
-        await call('setTier2Lock', { dates: allMonthDatesWithMarker(y, m), locked: true }, { silent: true });
-      }
       const dates = locked ? [date, marker] : [date];
       const res = await call('setTier2Lock', { dates, locked });
-      const list = res.lockedT2Dates || [];
-      if (!list.includes(marker)) list.push(marker);
-      state.data.lockedT2Dates = list;
       toast(`${date} 二車已${locked ? '鎖定' : '開放'}`, 'ok');
-      render();
-      if (state.modal) renderModal();
-      if (!$('#t2Modal').classList.contains('hidden')) renderT2Modal();
+      if (res && res.monthData) {
+        applyMonthData(res.monthData);
+      } else {
+        const list = res.lockedT2Dates || [];
+        if (!list.includes(marker)) list.push(marker);
+        state.data.lockedT2Dates = list;
+        rebuildIndexes(state.data);
+        render();
+        if (state.modal) renderModal();
+        if (!$('#t2Modal').classList.contains('hidden')) renderT2Modal();
+      }
     } catch (e) { toast(e.message, 'err'); }
   }
 
@@ -465,17 +529,18 @@
     const dates = Array.from({ length: days }, (_, i) => `${ym}-${pad(i + 1)}`);
     if (locked) dates.push(marker);
     try {
-      if (!locked) {
-        // 先確保初始化標記存在於後端，再將全月真實日期解鎖
-        await call('setTier2Lock', { dates: [dates[0], marker], locked: true }, { silent: true });
-      }
       const res = await call('setTier2Lock', { dates, locked });
-      const list = res.lockedT2Dates || [];
-      if (!list.includes(marker)) list.push(marker);
-      state.data.lockedT2Dates = list;
       toast(`本月二車已全數${locked ? '鎖定' : '開放'}`, 'ok');
-      render();
-      renderT2Modal();
+      if (res && res.monthData) {
+        applyMonthData(res.monthData);
+      } else {
+        const list = res.lockedT2Dates || [];
+        if (!list.includes(marker)) list.push(marker);
+        state.data.lockedT2Dates = list;
+        rebuildIndexes(state.data);
+        render();
+        renderT2Modal();
+      }
     } catch (e) { toast(e.message, 'err'); }
   }
 
@@ -761,21 +826,24 @@
     state.busy = true;
     try {
       const payloadTarget = isAdmin() ? m.targetName : undefined;
+      let res;
       if (m.editing) {
         const sel = m.selections[0];
-        const res = await call('updateShift', { id: m.editing.id, tier: sel.tier, start: sel.start, targetName: payloadTarget });
+        res = await call('updateShift', { id: m.editing.id, tier: sel.tier, start: sel.start, targetName: payloadTarget });
         toast(res.adminNote ? '已更新排班（已註記：管理員異動）' : '已更新排班', 'ok');
       } else {
-        const added = [];
         const ordered = [...m.selections].sort((a, b) => a.tier - b.tier || a.start - b.start);
-        for (const sel of ordered) {
-          await call('addShift', { date: m.date, tier: sel.tier, start: sel.start, targetName: payloadTarget });
-          added.push(`${CFG.TIER[sel.tier].name}${getShiftShortLabel(sel.tier, sel.start)}`);
-        }
-        toast(`登記成功（${added.length} 班）：${added.join('、')}`, 'ok');
+        res = await call('addShifts', {
+          date: m.date,
+          items: ordered.map(sel => ({ tier: sel.tier, start: sel.start })),
+          targetName: payloadTarget,
+        });
+        const addedLabels = ordered.map(sel => `${CFG.TIER[sel.tier].name}${getShiftShortLabel(sel.tier, sel.start)}`);
+        toast(`登記成功（${addedLabels.length} 班）：${addedLabels.join('、')}`, 'ok');
       }
       closeModal('#shiftModal');
-      await loadMonth(true);
+      if (res && res.monthData) applyMonthData(res.monthData);
+      else await loadMonth(true);
     } catch (e) {
       toast(e.message, 'err');
       await loadMonth(true);   // 取得最新狀態（例如已被他人搶先）
@@ -788,10 +856,11 @@
     if (!confirm(`確定取消 ${m.date} ${m.editing.name} ${CFG.TIER[m.editing.tier].name} ${getShiftLabel(m.editing.tier, m.editing.start, m.editing.end)} 的班？`)) return;
     state.busy = true;
     try {
-      await call('deleteShift', { id: m.editing.id });
+      const res = await call('deleteShift', { id: m.editing.id });
       toast('已取消此班', 'ok');
       closeModal('#shiftModal');
-      await loadMonth(true);
+      if (res && res.monthData) applyMonthData(res.monthData);
+      else await loadMonth(true);
     } catch (e) { toast(e.message, 'err'); await loadMonth(true); }
     finally { state.busy = false; }
   };
@@ -836,21 +905,32 @@
   // ---------------- 人員管理（管理員） ----------------
   $('#adminBtn').onclick = async () => { $('#adminModal').classList.remove('hidden'); await loadMembers(); };
 
+  function renderMemberTable(list) {
+    $('#memberTable tbody').innerHTML = list.map(m => `
+      <tr class="${m.active ? '' : 'inactive'}">
+        <td>${esc(m.name)}</td>
+        <td class="${m.role === 'admin' ? 'role-admin' : ''}">${m.role === 'admin' ? '管理員' : '成員'}</td>
+        <td>${m.active ? '啟用' : '已刪除（停用）'}</td>
+        <td>
+          ${m.active
+        ? `<button class="btn btn-light btn-sm" data-act="reset" data-name="${esc(m.name)}">重設 PIN</button>
+               <button class="btn btn-danger btn-sm" data-act="remove" data-name="${esc(m.name)}">刪除</button>`
+        : `<button class="btn btn-ghost-dark btn-sm" data-act="restore" data-name="${esc(m.name)}">恢復</button>`}
+        </td>
+      </tr>`).join('');
+  }
+
+  function applyRosterUpdate(roster) {
+    if (!Array.isArray(roster)) return;
+    state.data.members = roster;
+    state.monthCache.forEach(c => { c.members = roster; c.version = null; });
+    renderStats();
+  }
+
   async function loadMembers() {
     try {
       const list = await call('adminListMembers');
-      $('#memberTable tbody').innerHTML = list.map(m => `
-        <tr class="${m.active ? '' : 'inactive'}">
-          <td>${esc(m.name)}</td>
-          <td class="${m.role === 'admin' ? 'role-admin' : ''}">${m.role === 'admin' ? '管理員' : '成員'}</td>
-          <td>${m.active ? '啟用' : '已刪除（停用）'}</td>
-          <td>
-            ${m.active
-          ? `<button class="btn btn-light btn-sm" data-act="reset" data-name="${esc(m.name)}">重設 PIN</button>
-                 <button class="btn btn-danger btn-sm" data-act="remove" data-name="${esc(m.name)}">刪除</button>`
-          : `<button class="btn btn-ghost-dark btn-sm" data-act="restore" data-name="${esc(m.name)}">恢復</button>`}
-          </td>
-        </tr>`).join('');
+      renderMemberTable(list);
     } catch (e) { toast(e.message, 'err'); }
   }
 
@@ -859,21 +939,28 @@
     if (!b) return;
     const name = b.dataset.name, act = b.dataset.act;
     try {
+      let res;
       if (act === 'remove') {
         if (!confirm(`確定刪除「${name}」？（帳號停用，歷史排班紀錄保留）`)) return;
-        await call('adminRemoveMember', { name });
+        res = await call('adminRemoveMember', { name });
         toast(`已刪除 ${name}`, 'ok');
       } else if (act === 'restore') {
-        await call('adminRestoreMember', { name });
+        res = await call('adminRestoreMember', { name });
         toast(`已恢復 ${name}`, 'ok');
       } else if (act === 'reset') {
         const pin = prompt(`將「${name}」的 PIN 重設為（4～8 位數字，留空則為 0000）：`, '');
         if (pin === null) return;
         await call('adminResetPin', { name, pin: pin || '0000' });
         toast(`已重設 ${name} 的 PIN，下次登入需變更`, 'ok');
+        return;
       }
-      await loadMembers();
-      loadMonth(true);
+      if (res && res.members) {
+        renderMemberTable(res.members);
+        applyRosterUpdate(res.roster);
+      } else {
+        await loadMembers();
+        loadMonth(true);
+      }
     } catch (err) { toast(err.message, 'err'); }
   });
 
@@ -881,17 +968,24 @@
     e.preventDefault();
     const name = $('#newMemberName').value.trim();
     try {
-      await call('adminAddMember', { name, pin: $('#newMemberPin').value || '0000', role: $('#newMemberRole').value });
+      const res = await call('adminAddMember', { name, pin: $('#newMemberPin').value || '0000', role: $('#newMemberRole').value });
       toast(`已新增 ${name}`, 'ok');
       e.target.reset();
-      await loadMembers();
-      loadMonth(true);
+      if (res && res.members) {
+        renderMemberTable(res.members);
+        applyRosterUpdate(res.roster);
+      } else {
+        await loadMembers();
+        loadMonth(true);
+      }
     } catch (err) { toast(err.message, 'err'); }
   });
 
   // ---------------- 啟動 ----------------
   $('#unitName').textContent = CFG.UNIT_NAME;
-  window.addEventListener('storage', () => { if (state.session) loadMonth(true); });
+  window.addEventListener('storage', e => {
+    if (API.mode === 'mock' && e.key === 'vems_db_v2' && state.session) loadMonth(true);
+  });
   if (state.session) enterApp().catch(() => logout());
   else initLogin();
 })();

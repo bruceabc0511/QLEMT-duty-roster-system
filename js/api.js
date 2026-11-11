@@ -115,17 +115,35 @@
       this.save(db);
       return true;
     }
-    _getMonth({ token, year, month }) {
+    monthPayload(db, year, month) {
+      const prefix = `${year}-${pad(month)}-`;
+      const shifts = db.shifts.filter(s => s.date.startsWith(prefix));
+      const lockedT2Dates = this.lockedForMonth(db, year, month);
+      const members = this.roster(db);
+      const version = String(Date.now()) + '_' + shifts.length;
+      return { year, month, version, shifts, lockedT2Dates, members, sheetUrl: '' };
+    }
+    _getMonth({ token, year, month, version }) {
       this.session(token);
       const db = this.load();
-      const prefix = `${year}-${pad(month)}-`;
-      return {
-        year, month,
-        shifts: db.shifts.filter(s => s.date.startsWith(prefix)),
-        lockedT2Dates: this.lockedForMonth(db, year, month),
-        members: this.roster(db),
-        sheetUrl: '',
-      };
+      const ym = `${year}-${pad(month)}`;
+      db.monthVersions = db.monthVersions || {};
+      const curVer = db.monthVersions[ym];
+      if (version && curVer && version === curVer) {
+        return { unchanged: true, version: curVer, year, month };
+      }
+      const payload = this.monthPayload(db, year, month);
+      if (!curVer) {
+        db.monthVersions[ym] = payload.version;
+        this.save(db);
+      } else {
+        payload.version = curVer;
+      }
+      return payload;
+    }
+    bumpMonthVersion(db, ym) {
+      db.monthVersions = db.monthVersions || {};
+      db.monthVersions[ym] = Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     }
     _setTier2Lock({ token, date, dates, locked }) {
       this.admin(token);
@@ -135,10 +153,13 @@
       const ym = `${y}-${pad(m)}`;
       const db = this.load();
       const unlocked = new Set(db.t2UnlockedMonths[ym] || []);
-      list.forEach(d => { if (locked) unlocked.delete(d); else unlocked.add(d); });
+      list.forEach(d => { if (d.endsWith('-00')) return; if (locked) unlocked.delete(d); else unlocked.add(d); });
       db.t2UnlockedMonths[ym] = Array.from(unlocked).sort();
+      this.bumpMonthVersion(db, ym);
       this.save(db);
-      return { lockedT2Dates: this.lockedForMonth(db, y, m) };
+      const monthData = this.monthPayload(db, y, m);
+      monthData.version = db.monthVersions[ym];
+      return { lockedT2Dates: monthData.lockedT2Dates, monthData };
     }
     getShiftDef(tier, start) {
       const t = CFG.TIER[tier];
@@ -200,8 +221,41 @@
       const def = this.validate(db, { date, tier, start, name, isAdmin });
       const rec = { id: uuid(), date, tier, start, end: def.end, name, createdAt: new Date().toISOString(), adminNote };
       db.shifts.push(rec);
+      const [y, m] = date.split('-').map(Number);
+      const ym = `${y}-${pad(m)}`;
+      this.bumpMonthVersion(db, ym);
       this.save(db);
-      return rec;
+      const monthData = this.monthPayload(db, y, m);
+      monthData.version = db.monthVersions[ym];
+      return Object.assign({}, rec, { monthData });
+    }
+    _addShifts({ token, date, items, targetName }) {
+      const me = this.session(token);
+      const isAdmin = me.role === 'admin';
+      const list = Array.isArray(items) ? items : [];
+      if (!list.length) throw new Error('請至少選擇一個班別');
+      const baseDate = date ? String(date) : String(list[0].date || '');
+      const [y, m] = baseDate.split('-').map(Number);
+      const ym = `${y}-${pad(m)}`;
+      const name = (isAdmin && targetName) ? String(targetName).trim() : me.name;
+      const adminNote = (isAdmin && name !== me.name) ? '管理員異動' : '';
+      const ordered = list
+        .map(it => ({ date: String(it.date || baseDate), tier: Number(it.tier), start: Number(it.start) }))
+        .sort((a, b) => a.tier - b.tier || a.start - b.start);
+      const db = this.load();
+      const nowIso = new Date().toISOString();
+      const added = [];
+      for (const it of ordered) {
+        const def = this.validate(db, { date: it.date, tier: it.tier, start: it.start, name, isAdmin });
+        const rec = { id: uuid(), date: it.date, tier: it.tier, start: it.start, end: def.end, name, createdAt: nowIso, adminNote };
+        db.shifts.push(rec);
+        added.push(rec);
+      }
+      this.bumpMonthVersion(db, ym);
+      this.save(db);
+      const monthData = this.monthPayload(db, y, m);
+      monthData.version = db.monthVersions[ym];
+      return { added, monthData };
     }
     _updateShift({ token, id, tier, start, targetName }) {
       const me = this.session(token);
@@ -216,8 +270,13 @@
       this.editable(s.date, isAdmin);
       const def = this.validate(db, { date: s.date, tier, start, name, excludeId: id, isAdmin });
       Object.assign(s, { tier, start, end: def.end, name, adminNote });
+      const [y, m] = s.date.split('-').map(Number);
+      const ym = `${y}-${pad(m)}`;
+      this.bumpMonthVersion(db, ym);
       this.save(db);
-      return s;
+      const monthData = this.monthPayload(db, y, m);
+      monthData.version = db.monthVersions[ym];
+      return Object.assign({}, s, { monthData });
     }
     _deleteShift({ token, id }) {
       const me = this.session(token);
@@ -228,8 +287,19 @@
       if (s.name !== me.name && !isAdmin) throw new Error('僅限本人或管理員可以取消排班');
       this.editable(s.date, isAdmin);
       db.shifts = db.shifts.filter(x => x.id !== id);
+      const [y, m] = s.date.split('-').map(Number);
+      const ym = `${y}-${pad(m)}`;
+      this.bumpMonthVersion(db, ym);
       this.save(db);
-      return true;
+      const monthData = this.monthPayload(db, y, m);
+      monthData.version = db.monthVersions[ym];
+      return { ok: true, monthData };
+    }
+    adminMembersPayload(db) {
+      return {
+        members: db.members.map(m => ({ name: m.name, role: m.role, active: m.active, mustChangePin: m.mustChange })),
+        roster: this.roster(db),
+      };
     }
     _adminListMembers({ token }) {
       this.admin(token);
@@ -245,8 +315,9 @@
       if (ex && ex.active) throw new Error(`「${name}」已在人員清單中`);
       if (ex) Object.assign(ex, { active: true, pin: hash(name + '|' + pin), role, mustChange: true });
       else db.members.push({ name, pin: hash(name + '|' + pin), role: role === 'admin' ? 'admin' : 'member', active: true, mustChange: true });
+      db.monthVersions = {};
       this.save(db);
-      return true;
+      return this.adminMembersPayload(db);
     }
     _adminRemoveMember({ token, name }) {
       const me = this.admin(token);
@@ -255,8 +326,9 @@
       const m = db.members.find(x => x.name === name);
       if (!m) throw new Error('查無此人員');
       m.active = false;
+      db.monthVersions = {};
       this.save(db);
-      return true;
+      return this.adminMembersPayload(db);
     }
     _adminRestoreMember({ token, name }) {
       this.admin(token);
@@ -264,8 +336,9 @@
       const m = db.members.find(x => x.name === name);
       if (!m) throw new Error('查無此人員');
       m.active = true;
+      db.monthVersions = {};
       this.save(db);
-      return true;
+      return this.adminMembersPayload(db);
     }
     _adminResetPin({ token, name, pin }) {
       this.admin(token);
