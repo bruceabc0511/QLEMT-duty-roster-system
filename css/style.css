@@ -1443,6 +1443,7 @@ main#appView {
 
   .calendar-wrap {
     padding: 8px;
+    overflow-x: visible;
     position: relative;
   }
 

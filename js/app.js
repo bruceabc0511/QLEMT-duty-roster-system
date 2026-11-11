@@ -509,22 +509,57 @@
     $('#dateStrip').innerHTML = html;
   }
 
+  let isScrollingToDate = false;
+  let scrollTimeout = null;
+
+  function centerPill(pill, smooth = true) {
+    if (!pill) return;
+    const wrap = document.getElementById('dateStripWrap');
+    if (!wrap) return;
+    const pillLeft = pill.offsetLeft;
+    const pillWidth = pill.offsetWidth;
+    const wrapWidth = wrap.clientWidth;
+    const targetLeft = pillLeft - (wrapWidth - pillWidth) / 2;
+    wrap.scrollTo({
+      left: Math.max(0, targetLeft),
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  }
+
   function scrollToDate(dateStr, { smooth = true, highlight = true } = {}) {
     const el = document.getElementById('day-' + dateStr);
     if (!el) return false;
-    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+
+    isScrollingToDate = true;
+    if (scrollTimeout) clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => { isScrollingToDate = false; }, smooth ? 650 : 150);
+
+    const topbar = document.getElementById('topbar');
+    const stripWrap = document.getElementById('dateStripWrap');
+    const topbarH = topbar ? topbar.offsetHeight : 48;
+    const stripH = (stripWrap && window.innerWidth <= 760) ? stripWrap.offsetHeight : 0;
+    const stickyOffset = topbarH + stripH + 8;
+
+    const elRect = el.getBoundingClientRect();
+    const targetY = window.pageYOffset + elRect.top - stickyOffset;
+
+    window.scrollTo({
+      top: Math.max(0, targetY),
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+
     if (highlight) {
       el.classList.remove('highlight-focus');
       void el.offsetWidth;
       el.classList.add('highlight-focus');
     }
+
     document.querySelectorAll('.date-pill').forEach(p => {
       const isTarget = p.dataset.pillDate === dateStr;
       p.classList.toggle('active', isTarget);
-      if (isTarget) {
-        p.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
+      if (isTarget) centerPill(p, smooth);
     });
+
     return true;
   }
 
@@ -541,18 +576,36 @@
   function setupDayObserver() {
     if (dayObserver) dayObserver.disconnect();
     if (window.innerWidth > 760 || typeof IntersectionObserver === 'undefined') return;
+
     dayObserver = new IntersectionObserver(entries => {
+      if (isScrollingToDate) return;
+      let bestEntry = null;
+      let minTop = Infinity;
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          const d = entry.target.dataset.dayDate;
+          const top = entry.boundingClientRect.top;
+          if (top >= 0 && top < minTop) {
+            minTop = top;
+            bestEntry = entry;
+          }
+        }
+      });
+      if (!bestEntry) {
+        const intersecting = entries.filter(e => e.isIntersecting);
+        if (intersecting.length) bestEntry = intersecting[intersecting.length - 1];
+      }
+      if (bestEntry) {
+        const d = bestEntry.target.dataset.dayDate;
+        if (d) {
           document.querySelectorAll('.date-pill').forEach(p => {
             p.classList.toggle('active', p.dataset.pillDate === d);
           });
           const activePill = document.querySelector(`.date-pill[data-pill-date="${d}"]`);
-          if (activePill) activePill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          centerPill(activePill, true);
         }
-      });
-    }, { rootMargin: '-60px 0px -75% 0px', threshold: 0 });
+      }
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+
     document.querySelectorAll('.day[data-day-date]').forEach(el => dayObserver.observe(el));
   }
 
