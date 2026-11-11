@@ -1436,6 +1436,13 @@ main#appView {
     font-size: 26px;
   }
 
+  .layout {
+    grid-template-columns: 100%;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+
   .calendar {
     grid-template-columns: 1fr;
     min-width: 0;
@@ -1445,11 +1452,15 @@ main#appView {
     padding: 8px;
     overflow-x: visible;
     position: relative;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   /* ---------- 手機版日期快選膠囊列 ---------- */
   .date-strip-wrap {
-    display: flex;
+    display: block;
     position: sticky;
     top: 48px;
     z-index: 12;
@@ -1460,7 +1471,11 @@ main#appView {
     margin: -8px -8px 10px -8px;
     padding: 6px 8px;
     overflow-x: auto;
+    max-width: calc(100% + 16px);
+    min-width: 0;
+    box-sizing: border-box;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .date-strip-wrap::-webkit-scrollbar {
@@ -1471,6 +1486,8 @@ main#appView {
     display: flex;
     gap: 6px;
     align-items: center;
+    width: max-content;
+    min-width: 100%;
   }
 
   .date-pill {

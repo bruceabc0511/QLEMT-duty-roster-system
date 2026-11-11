@@ -516,10 +516,10 @@
     if (!pill) return;
     const wrap = document.getElementById('dateStripWrap');
     if (!wrap) return;
-    const pillLeft = pill.offsetLeft;
-    const pillWidth = pill.offsetWidth;
-    const wrapWidth = wrap.clientWidth;
-    const targetLeft = pillLeft - (wrapWidth - pillWidth) / 2;
+    const wrapRect = wrap.getBoundingClientRect();
+    const pillRect = pill.getBoundingClientRect();
+    const currentLeftInWrap = pillRect.left - wrapRect.left + wrap.scrollLeft;
+    const targetLeft = currentLeftInWrap - (wrap.clientWidth - pillRect.width) / 2;
     wrap.scrollTo({
       left: Math.max(0, targetLeft),
       behavior: smooth ? 'smooth' : 'auto',
