@@ -54,17 +54,21 @@
       if (existing) {
         try {
           const parsed = JSON.parse(existing);
-          if (!parsed.t2UnlockedMonths) { parsed.t2UnlockedMonths = {}; this.save(parsed); }
+          let changed = false;
+          if (!parsed.t2UnlockedMonths) { parsed.t2UnlockedMonths = {}; changed = true; }
+          if (!parsed.holidays) { parsed.holidays = {}; changed = true; }
+          if (changed) this.save(parsed);
           return;
         } catch (_) { }
       }
       const members = [{ name: '管理員', pin: hash('管理員|9999'), role: 'admin', active: true, mustChange: false }]
         .concat(INITIAL.map(n => ({ name: n, pin: hash(n + '|0000'), role: 'member', active: true, mustChange: false })));
-      this.save({ members, shifts: [], t2UnlockedMonths: {}, sessions: {} });
+      this.save({ members, shifts: [], t2UnlockedMonths: {}, holidays: {}, sessions: {} });
     }
     load() {
       const db = JSON.parse(localStorage.getItem(DB_KEY));
       if (!db.t2UnlockedMonths) db.t2UnlockedMonths = {};
+      if (!db.holidays) db.holidays = {};
       return db;
     }
     save(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
@@ -120,8 +124,12 @@
       const shifts = db.shifts.filter(s => s.date.startsWith(prefix));
       const lockedT2Dates = this.lockedForMonth(db, year, month);
       const members = this.roster(db);
+      const holidays = {};
+      Object.keys(db.holidays || {}).forEach(d => {
+        if (d.startsWith(prefix)) holidays[d] = { name: db.holidays[d].name, type: db.holidays[d].type };
+      });
       const version = String(Date.now()) + '_' + shifts.length;
-      return { year, month, version, shifts, lockedT2Dates, members, sheetUrl: '' };
+      return { year, month, version, shifts, lockedT2Dates, members, holidays, sheetUrl: '' };
     }
     _getMonth({ token, year, month, version }) {
       this.session(token);
@@ -350,6 +358,82 @@
       m.pin = hash(name + '|' + pin); m.mustChange = true;
       this.save(db);
       return true;
+    }
+    formatHolidaysList(db) {
+      const map = db.holidays || {};
+      return Object.keys(map).sort().map(d => ({ date: d, name: map[d].name, type: map[d].type }));
+    }
+    _adminListHolidays({ token }) {
+      this.admin(token);
+      return this.formatHolidaysList(this.load());
+    }
+    _adminSaveHoliday({ token, date, name, type, activeYear, activeMonth }) {
+      this.admin(token);
+      date = String(date || '').trim();
+      name = String(name || '').trim();
+      type = String(type || '放假').trim() === '補班' ? '補班' : '放假';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日期格式錯誤（需為 YYYY-MM-DD）');
+      if (!name || name.length > 20) throw new Error('請輸入假日名稱（1～20 字）');
+      const db = this.load();
+      db.holidays[date] = { date, name, type };
+      const [hy, hm] = date.split('-').map(Number);
+      this.bumpMonthVersion(db, `${hy}-${pad(hm)}`);
+      this.save(db);
+      const ay = Number(activeYear) || hy, am = Number(activeMonth) || hm;
+      const monthData = this.monthPayload(db, ay, am);
+      monthData.version = db.monthVersions[`${ay}-${pad(am)}`] || monthData.version;
+      return { holidaysList: this.formatHolidaysList(db), monthData };
+    }
+    _adminDeleteHoliday({ token, date, activeYear, activeMonth }) {
+      this.admin(token);
+      date = String(date || '').trim();
+      const db = this.load();
+      if (!db.holidays[date]) throw new Error('找不到該日期的假日設定');
+      delete db.holidays[date];
+      const [hy, hm] = date.split('-').map(Number);
+      this.bumpMonthVersion(db, `${hy}-${pad(hm)}`);
+      this.save(db);
+      const ay = Number(activeYear) || hy, am = Number(activeMonth) || hm;
+      const monthData = this.monthPayload(db, ay, am);
+      monthData.version = db.monthVersions[`${ay}-${pad(am)}`] || monthData.version;
+      return { holidaysList: this.formatHolidaysList(db), monthData };
+    }
+    async _adminImportHolidays({ token, year, years, activeYear, activeMonth }) {
+      this.admin(token);
+      const yr = Number(year) || new Date().getFullYear();
+      const targetYears = Array.isArray(years) && years.length ? years.map(Number) : [yr, yr + 1];
+      const db = this.load();
+      let added = 0;
+      for (const y of targetYears) {
+        try {
+          const res = await fetch(`https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/${y}.json`);
+          if (!res.ok) continue;
+          const items = await res.json();
+          items.forEach(it => {
+            const raw = String(it.date || '').replace(/\D/g, '');
+            if (raw.length !== 8) return;
+            const dStr = `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+            if (db.holidays[dStr]) return;
+            const desc = String(it.description || '').trim();
+            const isWeekend = it.week === '六' || it.week === '日';
+            if (!isWeekend && it.isHoliday) {
+              db.holidays[dStr] = { date: dStr, name: desc || '國定假日', type: '放假' };
+              added++;
+            } else if (isWeekend && !it.isHoliday) {
+              db.holidays[dStr] = { date: dStr, name: desc || '補行上班', type: '補班' };
+              added++;
+            } else if (isWeekend && it.isHoliday && desc) {
+              db.holidays[dStr] = { date: dStr, name: desc, type: '放假' };
+              added++;
+            }
+          });
+        } catch (_) { }
+      }
+      db.monthVersions = {};
+      this.save(db);
+      const ay = Number(activeYear) || yr, am = Number(activeMonth) || (new Date().getMonth() + 1);
+      const monthData = this.monthPayload(db, ay, am);
+      return { added, total: Object.keys(db.holidays).length, holidaysList: this.formatHolidaysList(db), monthData };
     }
   }
 

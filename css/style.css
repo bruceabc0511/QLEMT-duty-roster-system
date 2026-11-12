@@ -684,6 +684,20 @@ main#appView {
   margin-left: 4px;
 }
 
+.day-holiday {
+  color: #B02A20;
+  font-weight: 700;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.day-makeup {
+  color: #1F4E78;
+  font-weight: 700;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
 .day-wd {
   display: none;
   font-size: 13px;
@@ -1274,6 +1288,31 @@ main#appView {
   grid-template-columns: 1fr 1fr 120px auto;
   gap: 8px;
   align-items: end;
+}
+
+.holiday-add {
+  grid-template-columns: 150px 1fr 150px auto;
+  margin-bottom: 10px;
+}
+
+.badge-holiday {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--weekend);
+  color: #A23B3B;
+}
+
+.badge-makeup {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--weekday);
+  color: #1F4E78;
 }
 
 .admin-add input,

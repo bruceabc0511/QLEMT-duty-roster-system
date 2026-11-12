@@ -25,9 +25,10 @@
     session: JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'),
     year: now.getFullYear(),
     month: now.getMonth() + 1,
-    data: { shifts: [], lockedT2Dates: [], members: [], sheetUrl: '' },
+    data: { shifts: [], lockedT2Dates: [], members: [], holidays: {}, sheetUrl: '' },
     shiftsByDate: new Map(),
     lockedT2Set: new Set(),
+    holidaysMap: {},
     monthCache: new Map(),
     lastSyncAt: 0,
     modal: null,          // { date, editing, tier, selections: [{tier, start}], targetName }
@@ -145,6 +146,16 @@
     });
     state.shiftsByDate = byDate;
     state.lockedT2Set = new Set(data.lockedT2Dates || []);
+    state.holidaysMap = data.holidays || {};
+  }
+
+  function getDateHolidayInfo(dateStr, dow) {
+    const h = state.holidaysMap && state.holidaysMap[dateStr];
+    if (h) {
+      const isMakeup = h.type === '補班';
+      return { isRed: !isMakeup, isMakeup, label: h.name || (isMakeup ? '補班' : '假日') };
+    }
+    return { isRed: dow === 0 || dow === 6, isMakeup: false, label: '' };
   }
 
   function toast(msg, type = '') {
@@ -213,6 +224,7 @@
     state.monthCache.clear();
     state.shiftsByDate.clear();
     state.lockedT2Set.clear();
+    state.holidaysMap = {};
     clearInterval(state.pollTimer);
     if (dayObserver) { dayObserver.disconnect(); dayObserver = null; }
     if (todayObserver) { todayObserver.disconnect(); todayObserver = null; }
@@ -283,6 +295,7 @@
     $('#userChip').textContent = (isAdmin() ? '👨🏻‍🚒 ' : '🔰 ') + state.session.name;
     $('#adminBtn').classList.toggle('hidden', !isAdmin());
     $('#t2ManageBtn').classList.toggle('hidden', !isAdmin());
+    $('#holidayManageBtn').classList.toggle('hidden', !isAdmin());
     const mb = $('#modeBadge');
     mb.textContent = API.mode === 'mock' ? '離線模式' : 'Google試算表已連線';
     mb.classList.toggle('mock', API.mode === 'mock');
@@ -407,7 +420,8 @@
         const locked2 = isT2Locked(date);
         const isTrain = dayNum === trainingDay;
         const notBookable = (date < today || !openInfo.open) && !adm;
-        const cls = ['day', d === 0 || d === 6 ? 'weekend' : '', date === today ? 'today' : '', notBookable ? 'past' : '', adm ? 'admin-view' : ''].join(' ');
+        const hInfo = getDateHolidayInfo(date, d);
+        const cls = ['day', hInfo.isRed ? 'weekend' : '', date === today ? 'today' : '', notBookable ? 'past' : '', adm ? 'admin-view' : ''].join(' ');
         let grid = '';
         for (let i = 0; i < SLOT_ROWS; i++) {
           const rowInfo = SHIFT_ROWS[i];
@@ -440,9 +454,10 @@
         const lockBtn = adm
           ? `<button type="button" class="t2-lock-toggle ${locked2 ? 'locked' : ''}" data-lock-date="${date}" title="點擊切換當日二車開放/鎖定">${locked2 ? '🔒二車' : '🔓二車'}</button>`
           : (locked2 ? `<span class="t2-lock-toggle locked" title="本日二車未開放">🔒二車</span>` : '');
+        const hTag = hInfo.label ? `<span class="${hInfo.isMakeup ? 'day-makeup' : 'day-holiday'}">(${esc(hInfo.label)})</span>` : '';
         html += `<div class="${cls}" id="day-${date}" data-day-date="${date}">
           <div class="day-head">
-            <span><span class="day-num">${dayNum}</span>${isTrain ? '<span class="day-training">(定訓)</span>' : ''}<span class="day-wd">星期${WD[d]}</span></span>
+            <span><span class="day-num">${dayNum}</span>${isTrain ? '<span class="day-training">(定訓)</span>' : ''}${hTag}<span class="day-wd">星期${WD[d]}</span></span>
             <span class="day-head-right">${lockBtn}<span class="badge ${t1n >= CFG.REQUIRED_T1_PER_DAY ? 'full' : ''}" title="一車已排 / 應排">${t1n}/${CFG.REQUIRED_T1_PER_DAY}</span></span>
           </div>
           <div class="day-grid">${grid}</div></div>`;
@@ -513,9 +528,10 @@
       const dowIdx = new Date(year, month - 1, d).getDay();
       const dow = WD[dowIdx];
       const isToday = date === today;
-      const isWeekend = dowIdx === 0 || dowIdx === 6;
+      const hInfo = getDateHolidayInfo(date, dowIdx);
       const hasMine = (state.shiftsByDate.get(date) || []).some(s => s.name === me);
-      html += `<button type="button" class="date-pill ${isToday ? 'today' : ''} ${isWeekend ? 'weekend' : ''} ${hasMine ? 'has-mine' : ''}" data-pill-date="${date}" title="${year - 1911}年${month}月${d}日（星期${dow}）">
+      const titleLabel = hInfo.label ? ` [${hInfo.label}]` : '';
+      html += `<button type="button" class="date-pill ${isToday ? 'today' : ''} ${hInfo.isRed ? 'weekend' : ''} ${hasMine ? 'has-mine' : ''}" data-pill-date="${date}" title="${year - 1911}年${month}月${d}日（星期${dow}）${esc(titleLabel)}">
         <span class="pill-day">${d}</span>
         <span class="pill-wd">週${dow}</span>
       </button>`;
@@ -697,7 +713,7 @@
       afterRender();
       loadMonth(true);
     } else {
-      state.data = { shifts: [], lockedT2Dates: [], members: state.data.members, sheetUrl: '' };
+      state.data = { shifts: [], lockedT2Dates: [], members: state.data.members, holidays: {}, sheetUrl: '' };
       rebuildIndexes(state.data);
       $('#monthLabel').textContent = `${year - 1911}年${month}月（${year}）`;
       loadMonth(false).then(() => afterRender());
@@ -770,11 +786,14 @@
     let html = '';
     for (let d = 1; d <= days; d++) {
       const date = `${year}-${pad(month)}-${pad(d)}`;
-      const wd = WD[new Date(year, month - 1, d).getDay()];
+      const dowIdx = new Date(year, month - 1, d).getDay();
+      const wd = WD[dowIdx];
       const locked = isT2Locked(date);
       const tLabel = d === trainDay ? '(定訓)' : '';
+      const hInfo = getDateHolidayInfo(date, dowIdx);
+      const hLabel = hInfo.label ? `(${esc(hInfo.label)})` : '';
       html += `<button type="button" class="t2-day-btn ${locked ? 'locked' : ''}" data-t2-date="${date}">
-        ${d}${tLabel}（${wd}）<small>${locked ? '🔒 已鎖定' : '🔓 開放中'}</small></button>`;
+        ${d}${tLabel}${hLabel}（${wd}）<small>${locked ? '🔒 已鎖定' : '🔓 開放中'}</small></button>`;
     }
     $('#t2DayGrid').innerHTML = html;
   }
@@ -1193,6 +1212,105 @@
       }
     } catch (err) { toast(err.message, 'err'); }
   });
+
+  // ---------------- 國定假日與補班管理（管理員） ----------------
+  function renderHolidayTable(list) {
+    const tb = $('#holidayTable tbody');
+    if (!tb) return;
+    if (!list || !list.length) {
+      tb.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center">尚無假日設定，可點擊上方「一鍵匯入政府行事曆」或手動新增。</td></tr>';
+      return;
+    }
+    tb.innerHTML = list.map(h => `
+      <tr>
+        <td>${esc(h.date)}</td>
+        <td>${esc(h.name)}</td>
+        <td><span class="${h.type === '補班' ? 'badge-makeup' : 'badge-holiday'}">${esc(h.type)}</span></td>
+        <td>
+          <button type="button" class="btn btn-danger btn-sm" data-del-holiday="${esc(h.date)}">刪除</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  async function loadHolidays() {
+    try {
+      const list = await call('adminListHolidays');
+      renderHolidayTable(list);
+    } catch (e) { toast(e.message, 'err'); }
+  }
+
+  function applyHolidayResult(res) {
+    state.monthCache.clear();
+    if (res && Array.isArray(res.holidaysList)) renderHolidayTable(res.holidaysList);
+    if (res && res.monthData) {
+      applyMonthData(res.monthData);
+    } else {
+      loadMonth(true, { force: true });
+    }
+  }
+
+  const holidayBtn = $('#holidayManageBtn');
+  if (holidayBtn) {
+    holidayBtn.onclick = async () => {
+      $('#holidayModal').classList.remove('hidden');
+      await loadHolidays();
+    };
+  }
+
+  const importHolidaysBtn = $('#importHolidaysBtn');
+  if (importHolidaysBtn) {
+    importHolidaysBtn.onclick = async () => {
+      try {
+        const res = await call('adminImportHolidays', {
+          year: state.year,
+          years: [state.year, state.year + 1],
+          activeYear: state.year,
+          activeMonth: state.month,
+        });
+        toast(`已匯入 ${res.added || 0} 筆政府行事曆（共 ${res.total || 0} 筆）`, 'ok');
+        applyHolidayResult(res);
+      } catch (err) { toast(err.message, 'err'); }
+    };
+  }
+
+  const saveHolidayForm = $('#saveHolidayForm');
+  if (saveHolidayForm) {
+    saveHolidayForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const date = $('#holidayDate').value;
+      const name = $('#holidayName').value.trim();
+      const type = $('#holidayType').value;
+      try {
+        const res = await call('adminSaveHoliday', {
+          date, name, type,
+          activeYear: state.year,
+          activeMonth: state.month,
+        });
+        toast(`已儲存 ${date}（${name}）`, 'ok');
+        $('#holidayName').value = '';
+        applyHolidayResult(res);
+      } catch (err) { toast(err.message, 'err'); }
+    });
+  }
+
+  const holidayTable = $('#holidayTable');
+  if (holidayTable) {
+    holidayTable.addEventListener('click', async e => {
+      const b = e.target.closest('button[data-del-holiday]');
+      if (!b) return;
+      const date = b.dataset.delHoliday;
+      if (!confirm(`確定刪除 ${date} 的假日設定？`)) return;
+      try {
+        const res = await call('adminDeleteHoliday', {
+          date,
+          activeYear: state.year,
+          activeMonth: state.month,
+        });
+        toast(`已刪除 ${date} 假日設定`, 'ok');
+        applyHolidayResult(res);
+      } catch (err) { toast(err.message, 'err'); }
+    });
+  }
 
   // ---------------- 啟動 ----------------
   $('#unitName').textContent = CFG.UNIT_NAME;
