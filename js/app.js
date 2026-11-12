@@ -218,6 +218,8 @@
     if (todayObserver) { todayObserver.disconnect(); todayObserver = null; }
     const fab = $('#todayFab');
     if (fab) fab.classList.add('hidden');
+    const topFab = $('#topFab');
+    if (topFab) topFab.classList.add('hidden');
     document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
     initLogin();
   }
@@ -251,13 +253,25 @@
     }
   });
 
-  // 手機版向下捲動進入月曆時，自動收合展開中的上方工具列與統計區
+  // 手機版向下捲動進入月曆時，自動收合展開中的上方工具列與統計區，並更新回頂部按鈕狀態
   let lastScrollY = 0;
+  function updateTopFab() {
+    const topFab = $('#topFab');
+    if (!topFab) return;
+    if (!state.session || window.innerWidth > 760) {
+      topFab.classList.add('hidden');
+      return;
+    }
+    topFab.classList.remove('hidden');
+    const y = window.scrollY || window.pageYOffset || 0;
+    topFab.classList.toggle('fab-hidden', y < 160);
+  }
   window.addEventListener('scroll', () => {
     const y = window.scrollY || 0;
     if (window.innerWidth <= 760 && y > 140 && y - lastScrollY > 25) {
       if (!$('#userArea').classList.contains('collapsed')) setTopMenuCollapsed(true);
     }
+    updateTopFab();
     lastScrollY = y;
   }, { passive: true });
 
@@ -610,6 +624,7 @@
   }
 
   function setupTodayObserver() {
+    updateTopFab();
     if (todayObserver) todayObserver.disconnect();
     const fab = $('#todayFab');
     if (!fab) return;
@@ -644,6 +659,18 @@
   const fabEl = $('#todayFab');
   if (fabEl) {
     fabEl.addEventListener('click', () => scrollToToday({ smooth: true, highlight: true }));
+  }
+
+  const topFabEl = $('#topFab');
+  if (topFabEl) {
+    topFabEl.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const firstPill = document.querySelector('.date-pill');
+      if (firstPill) {
+        document.querySelectorAll('.date-pill').forEach(p => p.classList.toggle('active', p === firstPill));
+        centerPill(firstPill, true);
+      }
+    });
   }
 
   // ---------------- 月份切換 ----------------

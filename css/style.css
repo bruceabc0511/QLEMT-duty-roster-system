@@ -619,9 +619,11 @@ main#appView {
   0% {
     box-shadow: 0 0 0 0 rgba(46, 139, 230, .75);
   }
+
   40% {
     box-shadow: 0 0 0 8px rgba(46, 139, 230, .35);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgba(46, 139, 230, 0);
   }
@@ -635,7 +637,8 @@ main#appView {
   display: none;
 }
 
-.today-fab {
+.today-fab,
+.top-fab {
   display: none;
 }
 
@@ -1563,8 +1566,9 @@ main#appView {
     background: #FFF;
   }
 
-  /* ---------- 回到今天浮動按鈕（FAB） ---------- */
-  .today-fab {
+  /* ---------- 回到今天 & 回頂部浮動按鈕（FAB） ---------- */
+  .today-fab,
+  .top-fab {
     position: fixed;
     right: 18px;
     bottom: calc(20px + env(safe-area-inset-bottom, 0px));
@@ -1574,9 +1578,9 @@ main#appView {
     gap: 6px;
     padding: 10px 16px;
     border-radius: 999px;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.45);
+    background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-dark) 100%);
+    color: #1B3A5C;
+    border: 1px solid #1B3A5C;
     box-shadow: 0 4px 18px rgba(46, 139, 230, .48);
     font-size: 13.5px;
     font-weight: 700;
@@ -1586,11 +1590,17 @@ main#appView {
     -webkit-tap-highlight-color: transparent;
   }
 
-  .today-fab:active {
+  .top-fab {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .today-fab:active,
+  .top-fab:active {
     transform: scale(0.92);
   }
 
-  .today-fab.fab-hidden {
+  .today-fab.fab-hidden,
+  .top-fab.fab-hidden {
     opacity: 0;
     pointer-events: none;
     transform: translateY(18px) scale(0.85);
