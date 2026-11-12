@@ -263,14 +263,15 @@
         <h3>國定假日與補班設定</h3>
         <p class="muted small">設定為「放假」的日期將自動比照週末標記淺紅底色；「補班」則會恢復一般平日藍底。亦可直接在 Google 試算表「假日設定」分頁編修。</p>
         <div class="t2-batch-bar">
-          <button type="button" class="btn btn-ghost-dark btn-sm" id="importHolidaysBtn">☁️ 一鍵匯入政府行事曆（今年／明年）</button>
+          <button type="button" class="btn btn-ghost-dark btn-sm"
+            id="importHolidaysBtn">📥自動匯入政府行政機關辦公日曆表（今年＋明年）</button>
         </div>
         <form class="admin-add holiday-add" id="saveHolidayForm">
           <input type="date" id="holidayDate" required>
-          <input id="holidayName" placeholder="假日名稱（如：國慶日、颱風假）" maxlength="20" required>
+          <input id="holidayName" placeholder="假日名稱（如：國慶日）" maxlength="20" required>
           <select id="holidayType">
-            <option value="放假">放假（標紅底）</option>
-            <option value="補班">補班（恢復平日底）</option>
+            <option value="放假">放假（紅底）</option>
+            <option value="補班">補班（藍底）</option>
           </select>
           <button class="btn btn-primary" type="submit">＋ 儲存</button>
         </form>
