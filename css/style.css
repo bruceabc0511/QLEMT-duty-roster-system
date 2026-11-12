@@ -1578,7 +1578,7 @@ main#appView {
     gap: 6px;
     padding: 10px 16px;
     border-radius: 999px;
-    background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-dark) 100%);
+    background: var(--primary-light);
     color: #1B3A5C;
     border: 1px solid #1B3A5C;
     box-shadow: 0 4px 18px rgba(46, 139, 230, .48);
