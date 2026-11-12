@@ -1579,7 +1579,7 @@ main#appView {
     padding: 10px 16px;
     border-radius: 999px;
     background: #fff;
-    color: var(--primary);
+    color: var(--primary-dark);
     border: 1px solid #1B3A5C;
     box-shadow: 0 4px 18px rgba(46, 139, 230, .48);
     font-size: 13.5px;
