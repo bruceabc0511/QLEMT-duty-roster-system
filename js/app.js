@@ -454,10 +454,9 @@
         const lockBtn = adm
           ? `<button type="button" class="t2-lock-toggle ${locked2 ? 'locked' : ''}" data-lock-date="${date}" title="點擊切換當日二車開放/鎖定">${locked2 ? '🔒二車' : '🔓二車'}</button>`
           : (locked2 ? `<span class="t2-lock-toggle locked" title="本日二車未開放">🔒二車</span>` : '');
-        const hTag = hInfo.label ? `<span class="${hInfo.isMakeup ? 'day-makeup' : 'day-holiday'}">(${esc(hInfo.label)})</span>` : '';
         html += `<div class="${cls}" id="day-${date}" data-day-date="${date}">
           <div class="day-head">
-            <span><span class="day-num">${dayNum}</span>${isTrain ? '<span class="day-training">(定訓)</span>' : ''}${hTag}<span class="day-wd">星期${WD[d]}</span></span>
+            <span><span class="day-num">${dayNum}</span>${isTrain ? '<span class="day-training">(定訓)</span>' : ''}<span class="day-wd">星期${WD[d]}</span></span>
             <span class="day-head-right">${lockBtn}<span class="badge ${t1n >= CFG.REQUIRED_T1_PER_DAY ? 'full' : ''}" title="一車已排 / 應排">${t1n}/${CFG.REQUIRED_T1_PER_DAY}</span></span>
           </div>
           <div class="day-grid">${grid}</div></div>`;
@@ -786,14 +785,11 @@
     let html = '';
     for (let d = 1; d <= days; d++) {
       const date = `${year}-${pad(month)}-${pad(d)}`;
-      const dowIdx = new Date(year, month - 1, d).getDay();
-      const wd = WD[dowIdx];
+      const wd = WD[new Date(year, month - 1, d).getDay()];
       const locked = isT2Locked(date);
       const tLabel = d === trainDay ? '(定訓)' : '';
-      const hInfo = getDateHolidayInfo(date, dowIdx);
-      const hLabel = hInfo.label ? `(${esc(hInfo.label)})` : '';
       html += `<button type="button" class="t2-day-btn ${locked ? 'locked' : ''}" data-t2-date="${date}">
-        ${d}${tLabel}${hLabel}（${wd}）<small>${locked ? '🔒 已鎖定' : '🔓 開放中'}</small></button>`;
+        ${d}${tLabel}（${wd}）<small>${locked ? '🔒 已鎖定' : '🔓 開放中'}</small></button>`;
     }
     $('#t2DayGrid').innerHTML = html;
   }

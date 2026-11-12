@@ -684,20 +684,6 @@ main#appView {
   margin-left: 4px;
 }
 
-.day-holiday {
-  color: #B02A20;
-  font-weight: 700;
-  font-size: 12px;
-  margin-left: 4px;
-}
-
-.day-makeup {
-  color: #1F4E78;
-  font-weight: 700;
-  font-size: 12px;
-  margin-left: 4px;
-}
-
 .day-wd {
   display: none;
   font-size: 13px;
