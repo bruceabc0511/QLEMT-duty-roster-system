@@ -433,9 +433,11 @@ main#appView {
   margin-bottom: 16px;
 }
 
-.stats:has(#myStatCard.hidden),
-.stats.admin-view {
-  grid-template-columns: 2fr 1fr 1fr;
+@media (min-width: 1201px) {
+  .stats:has(#myStatCard.hidden),
+  .stats.admin-view {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
 }
 
 .stat {
@@ -1437,8 +1439,15 @@ main#appView {
     max-height: 60vh;
   }
 
-  .stats {
+  .stats,
+  .stats.admin-view,
+  .stats:has(#myStatCard.hidden) {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .stats.admin-view .stat-main,
+  .stats:has(#myStatCard.hidden) .stat-main {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1502,7 +1511,9 @@ main#appView {
     padding: 7px 12px;
   }
 
-  .stats {
+  .stats,
+  .stats.admin-view,
+  .stats:has(#myStatCard.hidden) {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
   }
