@@ -16,6 +16,7 @@
   const SLOT_ROWS = SHIFT_ROWS.length;
   const SESSION_KEY = 'vems_session';
   const RATE_TARGET = CFG.RATE_TARGET || 90;
+  const REQ_T1_PER_MEMBER = CFG.REQUIRED_T1_PER_MEMBER || 4;
   const OPEN_DAY = CFG.OPEN_NEXT_MONTH_DAY || 20;
   const OPEN_HOUR = CFG.OPEN_NEXT_MONTH_HOUR != null ? CFG.OPEN_NEXT_MONTH_HOUR : 20;
   const MAX_MULTI_SHIFTS = 3;
@@ -299,6 +300,8 @@
     const mb = $('#modeBadge');
     mb.textContent = API.mode === 'mock' ? '離線模式' : 'Google試算表已連線';
     mb.classList.toggle('mock', API.mode === 'mock');
+    mb.classList.toggle('hidden', !isAdmin());
+    $('#sheetLink').classList.toggle('hidden', !isAdmin() || !state.data?.sheetUrl);
 
     // 手機上預設自動收合上方工具列與統計面板，減少畫面干擾
     const isMobile = window.innerWidth <= 760;
@@ -374,7 +377,7 @@
     const { year, month } = state;
     $('#monthLabel').textContent = `${year - 1911}年${month}月（${year}）`;
     const link = $('#sheetLink');
-    link.classList.toggle('hidden', !state.data.sheetUrl);
+    link.classList.toggle('hidden', !isAdmin() || !state.data.sheetUrl);
     if (state.data.sheetUrl) link.href = state.data.sheetUrl;
 
     const openInfo = getMonthOpenInfo(year, month);
@@ -492,11 +495,35 @@
     const lockedCount = Math.max(0, state.lockedT2Set.size - (state.lockedT2Set.has(`${year}-${pad(month)}-00`) ? 1 : 0));
     const openT2Count = Math.max(0, days - lockedCount);
     $('#t2Sub').textContent = openT2Count ? `不列入排班率（本月開放 ${openT2Count} 天）` : '不列入排班率（預設全月鎖定）';
-    const me = state.session.name;
+    const me = state.session ? state.session.name : '';
     const mine = shifts.filter(s => s.name === me);
+    const myT1 = mine.filter(s => s.tier === 1).length;
+    const myT2 = mine.filter(s => s.tier === 2).length;
+    const myReached = myT1 >= REQ_T1_PER_MEMBER;
+    const myDiff = Math.max(0, REQ_T1_PER_MEMBER - myT1);
+    const myStatusText = myReached ? '本月已達標' : `本月未達標 (差 ${myDiff} 班)`;
+
     $('#myValue').textContent = mine.length;
-    $('#mySub').textContent = `一車 ${mine.filter(s => s.tier === 1).length} 班、二車 ${mine.filter(s => s.tier === 2).length} 班`;
-    $('#dashMiniSummary').textContent = `我已排班 ${mine.length} 天`;
+    const isAdm = isAdmin();
+    const statsEl = $('.stats');
+    if (statsEl) statsEl.classList.toggle('admin-view', isAdm);
+    const myCard = $('#myStatCard');
+    if (myCard) {
+      myCard.classList.toggle('hidden', isAdm);
+      myCard.classList.toggle('reached', myReached);
+      myCard.classList.toggle('unreached', !myReached);
+    }
+    const myBadge = $('#myGoalBadge');
+    if (myBadge) {
+      myBadge.textContent = myStatusText;
+      myBadge.classList.toggle('reached', myReached);
+    }
+    $('#mySub').textContent = `一車 ${myT1} 班、二車 ${myT2} 班`;
+    if (isAdm) {
+      $('#dashMiniSummary').textContent = `協勤統計資訊`;
+    } else {
+      $('#dashMiniSummary').textContent = `我已排班 ${mine.length} 班【${myStatusText}】`;
+    }
 
     const stat = new Map();
     state.data.members.forEach(n => stat.set(n, { t1: 0, t2: 0 }));
@@ -506,7 +533,17 @@
     });
     $('#statTable tbody').innerHTML = [...stat.entries()].map(([n, v]) => {
       const total = v.t1 + v.t2;
-      return `<tr class="${n === me ? 'me' : ''} ${total ? '' : 'zero'}"><td>${esc(n)}</td><td>${v.t1}</td><td>${v.t2}</td><td><b>${total}</b></td></tr>`;
+      const unreached = v.t1 < REQ_T1_PER_MEMBER;
+      const diff = REQ_T1_PER_MEMBER - v.t1;
+      const title = unreached
+        ? `${n}：一車 ${v.t1} 班（未達標，差 ${diff} 班）`
+        : `${n}：一車 ${v.t1} 班（已達標）`;
+      return `<tr class="${n === me ? 'me' : ''} ${total ? '' : 'zero'}" title="${esc(title)}">
+        <td title="${esc(title)}">${esc(n)}</td>
+        <td class="${unreached ? 't1-unreached' : ''}" title="${esc(title)}">${v.t1}</td>
+        <td>${v.t2}</td>
+        <td><b>${total}</b></td>
+      </tr>`;
     }).join('');
   }
 

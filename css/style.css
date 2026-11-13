@@ -433,6 +433,11 @@ main#appView {
   margin-bottom: 16px;
 }
 
+.stats:has(#myStatCard.hidden),
+.stats.admin-view {
+  grid-template-columns: 2fr 1fr 1fr;
+}
+
 .stat {
   background: #fff;
   border-radius: var(--radius);
@@ -498,6 +503,14 @@ main#appView {
   color: var(--navy);
 }
 
+#myStatCard.unreached {
+  border-left-color: var(--red);
+}
+
+#myStatCard.reached {
+  border-left-color: var(--green-ok);
+}
+
 .stat-sub {
   font-size: 13px;
   color: var(--muted);
@@ -552,13 +565,38 @@ main#appView {
   position: sticky;
   top: 90px;
   max-height: calc(100vh - 110px);
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.side h3 {
-  margin: 0 0 10px;
+.side-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.side-tbl-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.side-head h3 {
+  margin: 0;
   color: var(--navy);
   font-size: 16px;
+}
+
+.side-hint {
+  font-size: 11.5px;
+  color: var(--red);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* ---------- 行事曆（3 列：早班 / 中班 / 晚班） ---------- */
@@ -648,12 +686,12 @@ main#appView {
 }
 
 .day.past {
-  opacity: .65;
+  opacity: .30;
 }
 
 .day.today {
   border: 0px solid var(--primary-dark);
-  box-shadow: 0 0 0 3px rgb(255, 0, 0);
+  box-shadow: 0 0 0 4px var(--primary);
 }
 
 .day-head {
@@ -902,6 +940,8 @@ main#appView {
   text-align: center;
   position: sticky;
   top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 #EEF3F8;
 }
 
 .tbl td {
@@ -915,9 +955,15 @@ main#appView {
 }
 
 .tbl tr.me td {
-  background: #FFF5F4;
+  background: #CFE2F3;
   font-weight: 700;
-  color: var(--red);
+}
+
+.tbl td.t1-unreached,
+.tbl tr.me td.t1-unreached,
+.tbl tr.zero td.t1-unreached {
+  color: var(--red) !important;
+  font-weight: 700;
 }
 
 .tbl tr.zero td {
@@ -1384,6 +1430,11 @@ main#appView {
   .side {
     position: static;
     max-height: none;
+    overflow: visible;
+  }
+
+  .side-tbl-wrap {
+    max-height: 60vh;
   }
 
   .stats {

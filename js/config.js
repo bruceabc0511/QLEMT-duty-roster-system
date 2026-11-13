@@ -38,6 +38,7 @@ window.APP_CONFIG = {
     },
   },
   REQUIRED_T1_PER_DAY: 3,     // 每日一車應排班數（排班率分母）
+  REQUIRED_T1_PER_MEMBER: 4,  // 每人每月一車基本排班數門檻（少於4班為未達標）
   RATE_TARGET: 90,            // 每月協勤排班率達標門檻（%）
   ALLOW_PAST_EDIT: false,     // 是否允許修改過去日期（管理員不受限）
   POLL_SECONDS: 20,           // 自動更新間隔（秒），用來即時看到他人登記結果
