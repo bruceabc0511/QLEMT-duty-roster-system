@@ -476,11 +476,29 @@
     const required = days * CFG.REQUIRED_T1_PER_DAY;
     const rate = required ? Math.min(100, t1.length / required * 100) : 0;
     const reached = rate >= RATE_TARGET;
-    let gap = 0;
+    const today = todayStr();
+    const isPast = isPastMonth(year, month);
+    let t1Remaining = 0;
+    let t2Remaining = 0;
+    const t1Defs = CFG.TIER[1]?.shifts || [];
+    const t2Defs = CFG.TIER[2]?.shifts || [];
+
     for (let d = 1; d <= days; d++) {
       const date = `${year}-${pad(month)}-${pad(d)}`;
-      const dayT1 = (state.shiftsByDate.get(date) || []).reduce((acc, s) => acc + (s.tier === 1 ? 1 : 0), 0);
-      gap += Math.max(0, CFG.REQUIRED_T1_PER_DAY - dayT1);
+      if (date < today) continue; // 已經過去的日期無法再排班，統計顯示僅計系統當日至月底
+
+      const dayShifts = state.shiftsByDate.get(date) || [];
+      t1Defs.forEach(def => {
+        const taken = dayShifts.some(s => s.tier === 1 && s.start === def.start);
+        if (!taken) t1Remaining++;
+      });
+
+      if (!isT2Locked(date)) {
+        t2Defs.forEach(def => {
+          const taken = dayShifts.some(s => s.tier === 2 && s.start === def.start);
+          if (!taken) t2Remaining++;
+        });
+      }
     }
     $('#rateCard').classList.toggle('reached', reached);
     const gb = $('#goalBadge');
@@ -489,12 +507,16 @@
     $('#rateValue').textContent = rate.toFixed(1) + '%';
     $('#rateBar').style.width = rate + '%';
     $('#rateSub').textContent = `一車已排 ${t1.length} 班 ／ 應排 ${required} 班（${days} 天 × ${CFG.REQUIRED_T1_PER_DAY} 班）｜達標門檻 ${RATE_TARGET}%`;
-    $('#gapValue').textContent = gap;
-    $('#gapSub').textContent = gap ? '尚有空班，請踴躍登記' : '本月一車已全數排滿 🎉';
-    $('#t2Value').textContent = shifts.length - t1.length;
+    $('#gapValue').textContent = t1Remaining;
+    if (isPast) {
+      $('#gapSub').textContent = '過去月份不計剩餘班數';
+    } else {
+      $('#gapSub').textContent = t1Remaining ? '尚有空班，請踴躍登記' : '一車已全數排滿 🎉';
+    }
+    $('#t2Value').textContent = t2Remaining;
     const lockedCount = Math.max(0, state.lockedT2Set.size - (state.lockedT2Set.has(`${year}-${pad(month)}-00`) ? 1 : 0));
     const openT2Count = Math.max(0, days - lockedCount);
-    $('#t2Sub').textContent = openT2Count ? `不列入排班率（本月開放 ${openT2Count} 天）` : '不列入排班率（預設全月鎖定）';
+    $('#t2Sub').textContent = openT2Count ? `不列入排班率（本月開放 ${openT2Count} 天）` : '不列入排班率（全月鎖定）';
     const me = state.session ? state.session.name : '';
     const mine = shifts.filter(s => s.name === me);
     const myT1 = mine.filter(s => s.tier === 1).length;

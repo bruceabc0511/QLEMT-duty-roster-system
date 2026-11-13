@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>芎林義消救護分隊 | 協勤線上排班系統</title>
-  <link rel="stylesheet" href="css/style.css?v=20261113_7">
+  <link rel="stylesheet" href="css/style.css?v=20261114_2">
 </head>
 
 <body>
@@ -32,7 +32,7 @@
       <span class="mode-badge hidden" id="modeBadge"></span>
       <a class="btn btn-ghost hidden" id="sheetLink" target="_blank" rel="noopener">📊 Google試算表</a>
       <button class="btn btn-ghost hidden" id="t2ManageBtn">🚑 二車時段管理</button>
-      <button class="btn btn-ghost hidden" id="holidayManageBtn">🗓 假日設定</button>
+      <button class="btn btn-ghost hidden" id="holidayManageBtn">🗓️ 假日設定</button>
       <button class="btn btn-ghost hidden" id="adminBtn">👥 人員管理</button>
       <button class="btn btn-ghost" id="pinBtn">🔑 變更 PIN</button>
       <button class="btn btn-ghost" id="logoutBtn">登出</button>
@@ -81,10 +81,10 @@
     <div class="dashboard-panel" id="dashboardPanel">
       <div class="dash-subbar">
         <div class="legend">
-          <span><i class="lg lg-t1"></i>一車（早 08–12｜中 12–16｜晚 16–22）</span>
-          <span><i class="lg lg-t2"></i>二車（早 08–12｜中 12–18）</span>
-          <span><i class="lg lg-mine"></i>我的班</span>
-          <span><i class="lg lg-locked"></i>無二車</span>
+          <span><i class="lg lg-t1"></i>一車</span>
+          <span><i class="lg lg-t2"></i>二車</span>
+          <span><i class="lg lg-mine"></i>我的排班</span>
+          <span><i class="lg lg-locked"></i>當日無二車</span>
         </div>
         <span id="syncText" class="muted small"></span>
       </div>
@@ -103,12 +103,12 @@
           <div class="stat-sub" id="rateSub"></div>
         </div>
         <div class="stat">
-          <div class="stat-label">🚑一車 空缺班數</div>
+          <div class="stat-label">🚑一車 剩餘班數</div>
           <div class="stat-value warn" id="gapValue">0</div>
           <div class="stat-sub" id="gapSub"></div>
         </div>
         <div class="stat">
-          <div class="stat-label">🚑二車 已排班數</div>
+          <div class="stat-label">🚑二車 剩餘班數</div>
           <div class="stat-value t2" id="t2Value">0</div>
           <div class="stat-sub" id="t2Sub">不列入排班率</div>
         </div>
@@ -159,7 +159,7 @@
         <h3 id="shiftTitle"></h3>
         <div id="shiftExisting"></div>
         <div class="admin-panel hidden" id="adminShiftPanel">
-          <label class="inline-label">👨🏻‍🚒 管理員代排／異動人員：
+          <label class="inline-label">👨🏻‍🚒 管理員代排：
             <select id="shiftTargetMember"></select>
           </label>
           <div class="t2-lock-row">
@@ -316,9 +316,9 @@
     <div class="spinner"></div>
   </div>
 
-  <script src="js/config.js?v=20261113_7"></script>
-  <script src="js/api.js?v=20261113_7"></script>
-  <script src="js/app.js?v=20261113_7"></script>
+  <script src="js/config.js?v=20261114_2"></script>
+  <script src="js/api.js?v=20261114_2"></script>
+  <script src="js/app.js?v=20261114_2"></script>
 </body>
 
 </html>
