@@ -7,7 +7,7 @@
   --primary: #3687d8;
   --primary-dark: #2174c7;
   --primary-light: #EAF5FF;
-  --navy: #1B3A5C;
+  --navy: #15304d;
   --red: #E74C3C;
   --orange: #F39C12;
   --green-ok: #27AE60;
@@ -17,7 +17,7 @@
   --t2: #FFF2CC;
   --t2-fill: #FFD966;
   --t2-dark: #B7860B;
-  --weekend: #F4CCCC;
+  --weekend: #ffbaba;
   --weekday: #CFE2F3;
   --bg: #F3F8FD;
   --text: #22313F;
@@ -580,7 +580,7 @@ main#appView {
 
 .cal-head.weekend {
   background: var(--weekend);
-  color: #A23B3B;
+  color: #a10c0c;
 }
 
 .cal-head.corner {
