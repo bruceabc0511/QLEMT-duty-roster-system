@@ -1669,7 +1669,7 @@ main#appView {
   .top-fab {
     position: fixed;
     right: 18px;
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(25px + env(safe-area-inset-bottom, 0px));
     z-index: 25;
     display: inline-flex;
     align-items: center;
