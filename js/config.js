@@ -12,9 +12,9 @@ window.APP_CONFIG = {
   OPEN_NEXT_MONTH_DAY: 20,    // 每月 20 號自動開放選填次月班表
   OPEN_NEXT_MONTH_HOUR: 20,   // 開放時間：20:00（晚上 8 點）
   SHIFT_ROWS: [
-    { row: 1, label: '早班' },
-    { row: 2, label: '中班' },
-    { row: 3, label: '晚班' },
+    { row: 1, label: '早班', time: '08-12' },
+    { row: 2, label: '中班', time: '12-16' },
+    { row: 3, label: '晚班', time: '16-22' },
   ],
   TIER: {
     1: {
@@ -30,15 +30,17 @@ window.APP_CONFIG = {
     2: {
       name: '二車',
       start: 8,
-      end: 18,
+      end: 22,
       shifts: [
         { name: '早班', start: 8, end: 12, row: 1, span: 1 },
-        { name: '中班', start: 12, end: 18, row: 2, span: 2 },
+        { name: '中班', start: 12, end: 16, row: 2, span: 1 },
+        { name: '晚班', start: 16, end: 22, row: 3, span: 1 },
       ],
     },
   },
-  REQUIRED_T1_PER_DAY: 3,     // 每日一車應排班數（排班率分母）
-  REQUIRED_T1_PER_MEMBER: 4,  // 每人每月一車基本排班數門檻（少於4班為未達標）
+  REQUIRED_T1_PER_DAY: 3,       // 每日一車應排班數（排班率分母）
+  REQUIRED_T1_PER_MEMBER: 2,    // 每人每月一車基本排班數門檻（少於2班為未達標）
+  REQUIRED_TOTAL_PER_MEMBER: 4, // 每人每月一車＋二車合計排班數門檻（少於4班為未達標）
   RATE_TARGET: 90,            // 每月協勤排班率達標門檻（%）
   ALLOW_PAST_EDIT: false,     // 是否允許修改過去日期（管理員不受限）
   POLL_SECONDS: 20,           // 自動更新間隔（秒），用來即時看到他人登記結果

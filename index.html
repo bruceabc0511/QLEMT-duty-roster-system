@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>芎林義消救護分隊 | 協勤線上排班系統</title>
-  <link rel="stylesheet" href="css/style.css?v=20261114_2">
+  <link rel="stylesheet" href="css/style.css?v=20261114_7">
 </head>
 
 <body>
@@ -28,7 +28,7 @@
             id="menuArrow">▾</span></button>
       </div>
     </div>
-    <div class="user-area hidden" id="userArea">
+    <div class="user-area hidden collapsed" id="userArea">
       <span class="mode-badge hidden" id="modeBadge"></span>
       <a class="btn btn-ghost hidden" id="sheetLink" target="_blank" rel="noopener">📊 Google試算表</a>
       <button class="btn btn-ghost hidden" id="t2ManageBtn">🚑 二車時段管理</button>
@@ -70,7 +70,7 @@
       </div>
       <div class="toolbar-actions">
         <button type="button" class="btn btn-ghost-dark dash-toggle-btn" id="toggleDashBtn" title="展開/收合排班率統計與圖例">
-          <span id="dashMiniSummary">統計資訊</span> <span id="dashArrow">▴</span>
+          <span id="dashMiniSummary">統計資訊</span> <span id="dashArrow">▾</span>
         </button>
         <button class="btn btn-ghost-dark" id="refreshBtn" title="重新整理">⟳ 更新</button>
       </div>
@@ -78,7 +78,7 @@
 
     <div class="open-banner hidden" id="monthOpenBanner"></div>
 
-    <div class="dashboard-panel" id="dashboardPanel">
+    <div class="dashboard-panel collapsed" id="dashboardPanel">
       <div class="dash-subbar">
         <div class="legend">
           <span><i class="lg lg-t1"></i>一車</span>
@@ -170,7 +170,7 @@
         <div class="tier-tabs" id="tierTabs">
           <button class="tier-tab t1" data-tier="1">一車 <small>早08–12｜中12–16｜晚16–22</small></button>
           <button class="tier-tab t2" data-tier="2" id="tier2TabBtn">二車 <small
-              id="tier2TabSub">早08–12｜中12–18</small></button>
+              id="tier2TabSub">早08–12｜中12–16｜晚16–22</small></button>
         </div>
         <div class="multi-bar" id="multiSelectBar"></div>
         <div class="slot-list" id="slotList"></div>
@@ -316,9 +316,9 @@
     <div class="spinner"></div>
   </div>
 
-  <script src="js/config.js?v=20261114_2"></script>
-  <script src="js/api.js?v=20261114_2"></script>
-  <script src="js/app.js?v=20261114_2"></script>
+  <script src="js/config.js?v=20261114_7"></script>
+  <script src="js/api.js?v=20261114_7"></script>
+  <script src="js/app.js?v=20261114_7"></script>
 </body>
 
 </html>

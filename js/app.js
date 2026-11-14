@@ -9,14 +9,15 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const WD = ['日', '一', '二', '三', '四', '五', '六'];
   const SHIFT_ROWS = CFG.SHIFT_ROWS || [
-    { row: 1, label: '早班' },
-    { row: 2, label: '中班' },
-    { row: 3, label: '晚班' },
+    { row: 1, label: '早班', time: '08-12' },
+    { row: 2, label: '中班', time: '12-16' },
+    { row: 3, label: '晚班', time: '16-22' },
   ];
   const SLOT_ROWS = SHIFT_ROWS.length;
   const SESSION_KEY = 'vems_session';
   const RATE_TARGET = CFG.RATE_TARGET || 90;
-  const REQ_T1_PER_MEMBER = CFG.REQUIRED_T1_PER_MEMBER || 4;
+  const REQ_T1_PER_MEMBER = CFG.REQUIRED_T1_PER_MEMBER || 2;
+  const REQ_TOTAL_PER_MEMBER = CFG.REQUIRED_TOTAL_PER_MEMBER || 4;
   const OPEN_DAY = CFG.OPEN_NEXT_MONTH_DAY || 20;
   const OPEN_HOUR = CFG.OPEN_NEXT_MONTH_HOUR != null ? CFG.OPEN_NEXT_MONTH_HOUR : 20;
   const MAX_MULTI_SHIFTS = 3;
@@ -69,13 +70,12 @@
   function resolveShiftRow(s) {
     const def = getShiftDef(s.tier, s.start);
     if (def) return def.row;
-    if (s.tier === 2) return s.start < 12 ? 1 : 2;
     return s.start < 12 ? 1 : (s.start < 16 ? 2 : 3);
   }
   function resolveShiftSpan(s) {
     const def = getShiftDef(s.tier, s.start);
     if (def && def.span) return def.span;
-    return (s.tier === 2 && s.start >= 12) ? 2 : 1;
+    return 1;
   }
 
   /** 檢查指定年月是否已開放一般成員選填（每月 20 號 20:00 開放次月班表） */
@@ -303,10 +303,9 @@
     mb.classList.toggle('hidden', !isAdmin());
     $('#sheetLink').classList.toggle('hidden', !isAdmin() || !state.data?.sheetUrl);
 
-    // 手機上預設自動收合上方工具列與統計面板，減少畫面干擾
-    const isMobile = window.innerWidth <= 760;
-    setTopMenuCollapsed(isMobile);
-    setDashboardCollapsed(isMobile);
+    // 預設自動收合上方工具列與統計面板，減少畫面干擾
+    setTopMenuCollapsed(true);
+    setDashboardCollapsed(true);
 
     await loadMonth();
     if (window.innerWidth <= 760) {
@@ -410,7 +409,11 @@
       WD.map((w, i) => `<div class="cal-head ${i === 0 || i === 6 ? 'weekend' : ''}">星期${w}</div>`).join('');
 
     const axis = '<div class="axis"><span></span>' +
-      SHIFT_ROWS.map(r => `<span>${esc(r.label)}</span>`).join('') + '</div>';
+      SHIFT_ROWS.map(r => {
+        const def = getShiftByRow(1, r.row);
+        const timeStr = r.time || (def ? `${pad(def.start)}-${pad(def.end)}` : '');
+        return `<span><span>${esc(r.label)}</span>${timeStr ? `<small>${esc(timeStr)}</small>` : ''}</span>`;
+      }).join('') + '</div>';
 
     for (let w = 0; w < weeks; w++) {
       html += axis;
@@ -428,17 +431,19 @@
         let grid = '';
         for (let i = 0; i < SLOT_ROWS; i++) {
           const rowInfo = SHIFT_ROWS[i];
-          grid += `<div class="tl" style="grid-row:${rowInfo.row}">${esc(rowInfo.label)}</div>`;
+          const def = getShiftByRow(1, rowInfo.row);
+          const timeStr = rowInfo.time || (def ? `${pad(def.start)}-${pad(def.end)}` : '');
+          grid += `<div class="tl" style="grid-row:${rowInfo.row}"><span>${esc(rowInfo.label)}</span>${timeStr ? `<small>${esc(timeStr)}</small>` : ''}</div>`;
         }
         (CFG.TIER[1].shifts || []).forEach(t1Def => {
           const span1 = t1Def.span || 1;
-          grid += `<div class="slot t1" style="grid-row:${t1Def.row} / span ${span1}" data-date="${date}" data-tier="1" data-hour="${t1Def.start}" title="一車 ${t1Def.name}（${range(t1Def.start, t1Def.end)}）"><span class="slot-hint">${t1Def.name} ${pad(t1Def.start)}-${pad(t1Def.end)}</span></div>`;
+          grid += `<div class="slot t1" style="grid-row:${t1Def.row} / span ${span1}" data-date="${date}" data-tier="1" data-hour="${t1Def.start}" title="一車 ${t1Def.name}（${range(t1Def.start, t1Def.end)}）"><span class="slot-hint">${esc(t1Def.name)}</span></div>`;
         });
         (CFG.TIER[2].shifts || []).forEach(t2Def => {
           const span2 = t2Def.span || 1;
           grid += locked2
             ? `<div class="slot locked ${t2Def.row === 1 ? 'first-locked' : ''}" style="grid-row:${t2Def.row} / span ${span2}" data-date="${date}" data-tier="2" data-hour="${t2Def.start}" title="本日無二車"></div>`
-            : `<div class="slot t2" style="grid-row:${t2Def.row} / span ${span2}" data-date="${date}" data-tier="2" data-hour="${t2Def.start}" title="二車 ${t2Def.name}（${range(t2Def.start, t2Def.end)}）"><span class="slot-hint">${t2Def.name} ${pad(t2Def.start)}-${pad(t2Def.end)}</span></div>`;
+            : `<div class="slot t2" style="grid-row:${t2Def.row} / span ${span2}" data-date="${date}" data-tier="2" data-hour="${t2Def.start}" title="二車 ${t2Def.name}（${range(t2Def.start, t2Def.end)}）"><span class="slot-hint">${esc(t2Def.name)}</span></div>`;
         });
         list.forEach(s => {
           const row = resolveShiftRow(s);
@@ -452,7 +457,7 @@
           const noteTitle = s.adminNote ? ` [${s.adminNote}]` : '';
           grid += `<div class="shift t${s.tier} ${mine ? 'mine' : ''} ${canEdit ? 'editable' : ''}" style="grid-row:${row} / span ${span}"
             ${canEdit ? `data-id="${s.id}"` : ''} title="${CFG.TIER[s.tier].name} ${shiftName ? shiftName + ' ' : ''}${range(s.start, dispEnd)}｜${esc(s.name)}${noteTitle}${canEdit ? '（點擊可修改）' : ''}">
-            <span>${esc(s.name)}</span><small>${shiftName ? shiftName + ' ' : ''}${pad(s.start)}-${pad(dispEnd)}</small>${noteHtml}</div>`;
+            <span>${esc(s.name)}</span>${noteHtml}</div>`;
         });
         const lockBtn = adm
           ? `<button type="button" class="t2-lock-toggle ${locked2 ? 'locked' : ''}" data-lock-date="${date}" title="點擊切換當日二車開放/鎖定">${locked2 ? '🔒二車' : '🔓二車'}</button>`
@@ -521,8 +526,9 @@
     const mine = shifts.filter(s => s.name === me);
     const myT1 = mine.filter(s => s.tier === 1).length;
     const myT2 = mine.filter(s => s.tier === 2).length;
-    const myReached = myT1 >= REQ_T1_PER_MEMBER;
-    const myDiff = Math.max(0, REQ_T1_PER_MEMBER - myT1);
+    const myTotal = myT1 + myT2;
+    const myReached = myT1 >= REQ_T1_PER_MEMBER && myTotal >= REQ_TOTAL_PER_MEMBER;
+    const myDiff = Math.max(0, REQ_T1_PER_MEMBER - myT1, REQ_TOTAL_PER_MEMBER - myTotal);
     const myStatusText = myReached ? '本月已達標' : `本月未達標 (差 ${myDiff} 班)`;
 
     $('#myValue').textContent = mine.length;
@@ -555,16 +561,16 @@
     });
     $('#statTable tbody').innerHTML = [...stat.entries()].map(([n, v]) => {
       const total = v.t1 + v.t2;
-      const unreached = v.t1 < REQ_T1_PER_MEMBER;
-      const diff = REQ_T1_PER_MEMBER - v.t1;
+      const unreached = v.t1 < REQ_T1_PER_MEMBER || total < REQ_TOTAL_PER_MEMBER;
+      const diff = Math.max(0, REQ_T1_PER_MEMBER - v.t1, REQ_TOTAL_PER_MEMBER - total);
       const title = unreached
-        ? `${n}：一車 ${v.t1} 班（未達標，差 ${diff} 班）`
-        : `${n}：一車 ${v.t1} 班（已達標）`;
+        ? `${n}：一車 ${v.t1} 班、合計 ${total} 班（未達標，差 ${diff} 班）`
+        : `${n}：一車 ${v.t1} 班、合計 ${total} 班（已達標）`;
       return `<tr class="${n === me ? 'me' : ''} ${total ? '' : 'zero'}" title="${esc(title)}">
         <td title="${esc(title)}">${esc(n)}</td>
         <td class="${unreached ? 't1-unreached' : ''}" title="${esc(title)}">${v.t1}</td>
         <td>${v.t2}</td>
-        <td><b>${total}</b></td>
+        <td class="${unreached ? 't1-unreached' : ''}" title="${esc(title)}"><b>${total}</b></td>
       </tr>`;
     }).join('');
   }
@@ -996,7 +1002,7 @@
       || (!m.editing && m.selections.some(s => s.tier === 1 && s.start === def.start))
     );
     $('#tier2TabBtn').classList.toggle('locked-tab', locked2 || !hasAnyT1ForT2);
-    $('#tier2TabSub').textContent = locked2 ? '🔒 已鎖定未開放' : (!hasAnyT1ForT2 ? '⚠️ 需先有一車對應班' : '早08–12｜中12–18');
+    $('#tier2TabSub').textContent = locked2 ? '🔒 已鎖定未開放' : (!hasAnyT1ForT2 ? '⚠️ 需先有一車對應班' : '早08–12｜中12–16｜晚16–22');
 
     document.querySelectorAll('.tier-tab').forEach(b => b.classList.toggle('active', Number(b.dataset.tier) === m.tier));
 
@@ -1062,7 +1068,7 @@
         || (!m.editing && m.selections.some(s => s.tier === 1 && s.start === def.start))
       );
       if (!hasAny) {
-        toast('當日一車早班或中班尚未有人排班，不可先排二車', 'err');
+        toast('當日一車尚未有人排班，不可先排二車', 'err');
       }
     }
     m.tier = nextTier;

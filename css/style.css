@@ -434,6 +434,7 @@ main#appView {
 }
 
 @media (min-width: 1201px) {
+
   .stats:has(#myStatCard.hidden),
   .stats.admin-view {
     grid-template-columns: 2fr 1fr 1fr;
@@ -629,22 +630,31 @@ main#appView {
 
 .axis {
   display: grid;
-  grid-template-rows: 30px repeat(3, 66px);
-  font-size: 12px;
+  grid-template-rows: 32px repeat(3, 58px);
+  font-size: 13px;
   font-weight: 700;
   color: var(--navy);
-  text-align: right;
-  padding-right: 6px;
+  text-align: center;
+  padding-right: 4px;
 }
 
-.axis span {
+.axis>span {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
+  line-height: 1.25;
 }
 
-.axis span:first-child {
-  line-height: 30px;
+.axis>span small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.axis>span:first-child {
+  line-height: 32px;
 }
 
 .day {
@@ -697,7 +707,7 @@ main#appView {
 }
 
 .day-head {
-  height: 40px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -777,7 +787,7 @@ main#appView {
 .day-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: repeat(3, 66px);
+  grid-template-rows: repeat(3, 58px);
   position: relative;
 }
 
@@ -880,9 +890,10 @@ main#appView {
   justify-content: center;
   align-items: center;
   text-align: center;
+  gap: 4px;
   cursor: default;
   overflow: hidden;
-  line-height: 1.15;
+  line-height: 1.2;
   box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
 }
 
@@ -897,9 +908,9 @@ main#appView {
   font-weight: 500;
   color: #960d78;
   background: rgba(255, 255, 255, 0.7);
-  padding: 0 4px;
+  padding: 1px 4px;
   border-radius: 4px;
-  margin-top: 1px;
+  line-height: 1.25;
 }
 
 .shift.t1 {
@@ -1710,6 +1721,7 @@ main#appView {
 
   .tl {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     grid-column: 1;
@@ -1718,6 +1730,14 @@ main#appView {
     color: var(--navy);
     border-top: 1px solid rgba(0, 0, 0, .06);
     background: #FAFCFE;
+    line-height: 1.2;
+  }
+
+  .tl small {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-top: 1px;
   }
 
   .slot.t1,
@@ -1733,9 +1753,8 @@ main#appView {
   }
 
   .shift {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 4px;
+    flex-direction: column;
+    gap: 1px;
     font-size: 13px;
   }
 
