@@ -57,18 +57,20 @@
           let changed = false;
           if (!parsed.t2UnlockedMonths) { parsed.t2UnlockedMonths = {}; changed = true; }
           if (!parsed.holidays) { parsed.holidays = {}; changed = true; }
+          if (!parsed.trainingOverrides) { parsed.trainingOverrides = {}; changed = true; }
           if (changed) this.save(parsed);
           return;
         } catch (_) { }
       }
       const members = [{ name: '管理員', pin: hash('管理員|9999'), role: 'admin', active: true, mustChange: false }]
         .concat(INITIAL.map(n => ({ name: n, pin: hash(n + '|0000'), role: 'member', active: true, mustChange: false })));
-      this.save({ members, shifts: [], t2UnlockedMonths: {}, holidays: {}, sessions: {} });
+      this.save({ members, shifts: [], t2UnlockedMonths: {}, holidays: {}, trainingOverrides: {}, sessions: {} });
     }
     load() {
       const db = JSON.parse(localStorage.getItem(DB_KEY));
       if (!db.t2UnlockedMonths) db.t2UnlockedMonths = {};
       if (!db.holidays) db.holidays = {};
+      if (!db.trainingOverrides) db.trainingOverrides = {};
       return db;
     }
     save(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
@@ -119,6 +121,17 @@
       this.save(db);
       return true;
     }
+    firstWednesdayDay(year, month) {
+      const firstDow = new Date(year, month - 1, 1).getDay();
+      return 1 + ((3 - firstDow + 7) % 7);
+    }
+    getTrainingDay(db, year, month) {
+      const ym = `${year}-${pad(month)}`;
+      const ov = Number((db.trainingOverrides || {})[ym]);
+      const days = new Date(year, month, 0).getDate();
+      if (Number.isInteger(ov) && ov >= 1 && ov <= days) return ov;
+      return this.firstWednesdayDay(year, month);
+    }
     monthPayload(db, year, month) {
       const prefix = `${year}-${pad(month)}-`;
       const shifts = db.shifts.filter(s => s.date.startsWith(prefix));
@@ -128,8 +141,9 @@
       Object.keys(db.holidays || {}).forEach(d => {
         if (d.startsWith(prefix)) holidays[d] = { name: db.holidays[d].name, type: db.holidays[d].type };
       });
+      const trainingDay = this.getTrainingDay(db, year, month);
       const version = String(Date.now()) + '_' + shifts.length;
-      return { year, month, version, shifts, lockedT2Dates, members, holidays, sheetUrl: '' };
+      return { year, month, version, shifts, lockedT2Dates, members, holidays, trainingDay, sheetUrl: '' };
     }
     _getMonth({ token, year, month, version }) {
       this.session(token);
@@ -434,6 +448,55 @@
       const ay = Number(activeYear) || yr, am = Number(activeMonth) || (new Date().getMonth() + 1);
       const monthData = this.monthPayload(db, ay, am);
       return { added, total: Object.keys(db.holidays).length, holidaysList: this.formatHolidaysList(db), monthData };
+    }
+    formatTrainingOverridesList(db) {
+      const map = db.trainingOverrides || {};
+      return Object.keys(map).sort().map(ym => {
+        const [y, m] = ym.split('-').map(Number);
+        const defaultDay = this.firstWednesdayDay(y, m);
+        const day = Number(map[ym]);
+        return {
+          ym, year: y, month: m, day, defaultDay,
+          date: `${ym}-${pad(day)}`,
+          defaultDate: `${ym}-${pad(defaultDay)}`,
+        };
+      });
+    }
+    _adminListTrainingOverrides({ token }) {
+      this.admin(token);
+      return this.formatTrainingOverridesList(this.load());
+    }
+    _adminSaveTrainingDay({ token, year, month, day, activeYear, activeMonth }) {
+      this.admin(token);
+      const y = Number(year), m = Number(month), d = Number(day);
+      if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) throw new Error('月份格式錯誤');
+      const days = new Date(y, m, 0).getDate();
+      if (!Number.isInteger(d) || d < 1 || d > days) throw new Error(`日期超出該月範圍（1～${days} 日）`);
+      const db = this.load();
+      const ym = `${y}-${pad(m)}`;
+      const defDay = this.firstWednesdayDay(y, m);
+      if (d === defDay) delete db.trainingOverrides[ym];
+      else db.trainingOverrides[ym] = d;
+      this.bumpMonthVersion(db, ym);
+      this.save(db);
+      const ay = Number(activeYear) || y, am = Number(activeMonth) || m;
+      const monthData = this.monthPayload(db, ay, am);
+      monthData.version = db.monthVersions[`${ay}-${pad(am)}`] || monthData.version;
+      return { list: this.formatTrainingOverridesList(db), monthData };
+    }
+    _adminResetTrainingDay({ token, year, month, activeYear, activeMonth }) {
+      this.admin(token);
+      const y = Number(year), m = Number(month);
+      if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) throw new Error('月份格式錯誤');
+      const db = this.load();
+      const ym = `${y}-${pad(m)}`;
+      delete db.trainingOverrides[ym];
+      this.bumpMonthVersion(db, ym);
+      this.save(db);
+      const ay = Number(activeYear) || y, am = Number(activeMonth) || m;
+      const monthData = this.monthPayload(db, ay, am);
+      monthData.version = db.monthVersions[`${ay}-${pad(am)}`] || monthData.version;
+      return { list: this.formatTrainingOverridesList(db), monthData };
     }
   }
 

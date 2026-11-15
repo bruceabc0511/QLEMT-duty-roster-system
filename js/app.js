@@ -31,6 +31,7 @@
     shiftsByDate: new Map(),
     lockedT2Set: new Set(),
     holidaysMap: {},
+    trainingOverrides: {},
     monthCache: new Map(),
     lastSyncAt: 0,
     modal: null,          // { date, editing, tier, selections: [{tier, start}], targetName }
@@ -127,9 +128,19 @@
     const firstDow = new Date(year, month - 1, 1).getDay(); // 0=日..3=三
     return 1 + ((3 - firstDow + 7) % 7);
   }
+  function getTrainingDay(year, month) {
+    if (state.data && state.data.year === year && state.data.month === month && state.data.trainingDay) {
+      return Number(state.data.trainingDay);
+    }
+    const ym = `${year}-${pad(month)}`;
+    if (state.trainingOverrides && state.trainingOverrides[ym]) {
+      return Number(state.trainingOverrides[ym]);
+    }
+    return firstWednesdayDay(year, month);
+  }
   function isTrainingDate(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
-    return d === firstWednesdayDay(y, m);
+    return d === getTrainingDay(y, m);
   }
   function isT2Locked(dateStr) {
     return state.lockedT2Set.has(dateStr);
@@ -148,6 +159,9 @@
     state.shiftsByDate = byDate;
     state.lockedT2Set = new Set(data.lockedT2Dates || []);
     state.holidaysMap = data.holidays || {};
+    if (data.year && data.month && data.trainingDay) {
+      state.trainingOverrides[`${data.year}-${pad(data.month)}`] = Number(data.trainingDay);
+    }
   }
 
   function getDateHolidayInfo(dateStr, dow) {
@@ -296,6 +310,7 @@
     $('#userChip').textContent = (isAdmin() ? '👨🏻‍🚒 ' : '🔰 ') + state.session.name;
     $('#adminBtn').classList.toggle('hidden', !isAdmin());
     $('#t2ManageBtn').classList.toggle('hidden', !isAdmin());
+    $('#trainingManageBtn').classList.toggle('hidden', !isAdmin());
     $('#holidayManageBtn').classList.toggle('hidden', !isAdmin());
     const mb = $('#modeBadge');
     mb.textContent = API.mode === 'mock' ? '離線模式' : 'Google試算表已連線';
@@ -400,7 +415,7 @@
     const firstDow = new Date(year, month - 1, 1).getDay();
     const days = new Date(year, month, 0).getDate();
     const weeks = Math.ceil((firstDow + days) / 7);
-    const trainingDay = firstWednesdayDay(year, month);
+    const trainingDay = getTrainingDay(year, month);
     const openInfo = getMonthOpenInfo(year, month);
     const today = todayStr();
     const me = state.session.name;
@@ -845,7 +860,7 @@
   function renderT2Modal() {
     const { year, month } = state;
     const days = new Date(year, month, 0).getDate();
-    const trainDay = firstWednesdayDay(year, month);
+    const trainDay = getTrainingDay(year, month);
     $('#t2ModalTitle').textContent = `${year - 1911}年${month}月 二車時段開放／鎖定管理`;
     let html = '';
     for (let d = 1; d <= days; d++) {
@@ -1369,6 +1384,159 @@
         });
         toast(`已刪除 ${date} 假日設定`, 'ok');
         applyHolidayResult(res);
+      } catch (err) { toast(err.message, 'err'); }
+    });
+  }
+
+  // ---------------- 定訓日期設定（管理員） ----------------
+  let trainingOverridesCache = [];
+
+  function renderTrainingMonthControls() {
+    const ym = $('#trainingMonth').value;
+    if (!/^\d{4}-\d{2}$/.test(ym)) return;
+    const [y, m] = ym.split('-').map(Number);
+    const days = new Date(y, m, 0).getDate();
+    const defDay = firstWednesdayDay(y, m);
+    const ov = trainingOverridesCache.find(x => x.ym === ym);
+    const curDay = ov ? ov.day : (state.data && state.data.year === y && state.data.month === m && state.data.trainingDay ? Number(state.data.trainingDay) : defDay);
+    const defWd = WD[new Date(y, m - 1, defDay).getDay()];
+    const curWd = WD[new Date(y, m - 1, curDay).getDay()];
+    const isOv = curDay !== defDay;
+
+    $('#trainingCurrentInfo').innerHTML =
+      `預設：<b>${y - 1911}年${m}月${defDay}日（${defWd}）</b> ｜ 目前設定：<b>${y - 1911}年${m}月${curDay}日（${curWd}）</b>` +
+      (isOv ? ' <span class="badge-holiday">已手動異動</span>' : ' <span class="badge-makeup">預設週三</span>');
+
+    let opts = '';
+    for (let d = 1; d <= days; d++) {
+      const wd = WD[new Date(y, m - 1, d).getDay()];
+      const tag = d === defDay ? '（預設週三）' : '';
+      opts += `<option value="${d}" ${d === curDay ? 'selected' : ''}>${m}月${d}日（${wd}）${tag}</option>`;
+    }
+    $('#trainingDaySelect').innerHTML = opts;
+    $('#resetTrainingBtn').disabled = !isOv;
+  }
+
+  function renderTrainingTable(list) {
+    trainingOverridesCache = Array.isArray(list) ? list : [];
+    const tbody = $('#trainingTable tbody');
+    if (!trainingOverridesCache.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="muted">目前無手動異動紀錄（各月皆為第一個星期三）</td></tr>';
+      renderTrainingMonthControls();
+      return;
+    }
+    tbody.innerHTML = trainingOverridesCache.map(item => {
+      const defWd = WD[new Date(item.year, item.month - 1, item.defaultDay).getDay()];
+      const newWd = WD[new Date(item.year, item.month - 1, item.day).getDay()];
+      return `<tr>
+        <td><b>${item.year - 1911}年${item.month}月</b></td>
+        <td>${item.defaultDate}（${defWd}）</td>
+        <td><span class="badge-holiday">${item.date}（${newWd}）</span></td>
+        <td>
+          <button type="button" class="btn btn-light btn-sm" data-edit-training="${esc(item.ym)}">修改</button>
+          <button type="button" class="btn btn-danger btn-sm" data-reset-training="${esc(item.ym)}">恢復預設</button>
+        </td>
+      </tr>`;
+    }).join('');
+    renderTrainingMonthControls();
+  }
+
+  async function loadTrainingOverrides() {
+    try {
+      const list = await call('adminListTrainingOverrides');
+      renderTrainingTable(list);
+    } catch (e) { toast(e.message, 'err'); }
+  }
+
+  function applyTrainingResult(res) {
+    state.monthCache.clear();
+    state.trainingOverrides = {};
+    if (res && Array.isArray(res.list)) {
+      res.list.forEach(item => { state.trainingOverrides[item.ym] = item.day; });
+      renderTrainingTable(res.list);
+    }
+    if (res && res.monthData) {
+      applyMonthData(res.monthData);
+    } else {
+      loadMonth(true, { force: true });
+    }
+  }
+
+  const trainingBtn = $('#trainingManageBtn');
+  if (trainingBtn) {
+    trainingBtn.onclick = async () => {
+      $('#trainingMonth').value = `${state.year}-${pad(state.month)}`;
+      $('#trainingModal').classList.remove('hidden');
+      renderTrainingMonthControls();
+      await loadTrainingOverrides();
+    };
+  }
+
+  const trainingMonthInput = $('#trainingMonth');
+  if (trainingMonthInput) {
+    trainingMonthInput.addEventListener('change', renderTrainingMonthControls);
+  }
+
+  const saveTrainingForm = $('#saveTrainingForm');
+  if (saveTrainingForm) {
+    saveTrainingForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const ym = $('#trainingMonth').value;
+      const day = Number($('#trainingDaySelect').value);
+      if (!/^\d{4}-\d{2}$/.test(ym)) return toast('請選擇月份', 'err');
+      const [year, month] = ym.split('-').map(Number);
+      try {
+        const res = await call('adminSaveTrainingDay', {
+          year, month, day,
+          activeYear: state.year,
+          activeMonth: state.month,
+        });
+        toast(`已將 ${year - 1911}年${month}月定訓日期設為 ${month}/${day}`, 'ok');
+        applyTrainingResult(res);
+      } catch (err) { toast(err.message, 'err'); }
+    });
+  }
+
+  const resetTrainingBtn = $('#resetTrainingBtn');
+  if (resetTrainingBtn) {
+    resetTrainingBtn.addEventListener('click', async () => {
+      const ym = $('#trainingMonth').value;
+      if (!/^\d{4}-\d{2}$/.test(ym)) return;
+      const [year, month] = ym.split('-').map(Number);
+      try {
+        const res = await call('adminResetTrainingDay', {
+          year, month,
+          activeYear: state.year,
+          activeMonth: state.month,
+        });
+        toast(`已恢復 ${year - 1911}年${month}月定訓為預設第一個星期三`, 'ok');
+        applyTrainingResult(res);
+      } catch (err) { toast(err.message, 'err'); }
+    });
+  }
+
+  const trainingTable = $('#trainingTable');
+  if (trainingTable) {
+    trainingTable.addEventListener('click', async e => {
+      const editBtn = e.target.closest('button[data-edit-training]');
+      if (editBtn) {
+        $('#trainingMonth').value = editBtn.dataset.editTraining;
+        renderTrainingMonthControls();
+        return;
+      }
+      const resetBtn = e.target.closest('button[data-reset-training]');
+      if (!resetBtn) return;
+      const ym = resetBtn.dataset.resetTraining;
+      const [year, month] = ym.split('-').map(Number);
+      if (!confirm(`確定將 ${year - 1911}年${month}月定訓恢復為第一個星期三？`)) return;
+      try {
+        const res = await call('adminResetTrainingDay', {
+          year, month,
+          activeYear: state.year,
+          activeMonth: state.month,
+        });
+        toast(`已恢復 ${year - 1911}年${month}月定訓為預設值`, 'ok');
+        applyTrainingResult(res);
       } catch (err) { toast(err.message, 'err'); }
     });
   }

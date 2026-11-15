@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>芎林義消救護分隊 | 協勤線上排班系統</title>
-  <link rel="stylesheet" href="css/style.css?v=20261114_7">
+  <link rel="stylesheet" href="css/style.css?v=20261115_2">
 </head>
 
 <body>
@@ -32,6 +32,7 @@
       <span class="mode-badge hidden" id="modeBadge"></span>
       <a class="btn btn-ghost hidden" id="sheetLink" target="_blank" rel="noopener">📊 Google試算表</a>
       <button class="btn btn-ghost hidden" id="t2ManageBtn">🚑 二車時段管理</button>
+      <button class="btn btn-ghost hidden" id="trainingManageBtn">📅 定訓日期</button>
       <button class="btn btn-ghost hidden" id="holidayManageBtn">🗓️ 假日設定</button>
       <button class="btn btn-ghost hidden" id="adminBtn">👥 人員管理</button>
       <button class="btn btn-ghost" id="pinBtn">🔑 變更 PIN</button>
@@ -303,6 +304,49 @@
     </div>
   </div>
 
+  <!-- ===== 定訓日期設定（管理員） ===== -->
+  <div class="modal hidden" id="trainingModal">
+    <div class="modal-box wide">
+      <div class="modal-body">
+        <button type="button" class="modal-x" data-close>×</button>
+        <h3>定訓日期設定</h3>
+        <p class="muted small">定訓預設為每月第一個星期三。如遇臨時改期，請選擇月份並變更定訓日期。</p>
+        <form id="saveTrainingForm" class="training-form">
+          <div class="training-row">
+            <label>選擇月份
+              <input type="month" id="trainingMonth" required>
+            </label>
+            <label>變更定訓日期
+              <select id="trainingDaySelect" required></select>
+            </label>
+          </div>
+          <div class="training-info" id="trainingCurrentInfo"></div>
+          <div class="training-form-actions">
+            <button class="btn btn-primary" type="submit">💾 儲存變更</button>
+            <button class="btn btn-ghost-dark" type="button" id="resetTrainingBtn">↩ 恢復預設（第一個週三）</button>
+          </div>
+        </form>
+        <div class="tbl-scroll" style="margin-top:12px;">
+          <table class="tbl" id="trainingTable">
+            <thead>
+              <tr>
+                <th>月份</th>
+                <th>原定日期</th>
+                <th>異動後日期</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-light" data-close>關閉</button>
+      </div>
+    </div>
+  </div>
+
   <button type="button" class="top-fab hidden" id="topFab" title="回頂部" aria-label="回頂部">
     <span class="top-fab-icon">🔝</span>
     <span class="top-fab-text">回頂部</span>
@@ -316,9 +360,9 @@
     <div class="spinner"></div>
   </div>
 
-  <script src="js/config.js?v=20261114_7"></script>
-  <script src="js/api.js?v=20261114_7"></script>
-  <script src="js/app.js?v=20261114_7"></script>
+  <script src="js/config.js?v=20261115_2"></script>
+  <script src="js/api.js?v=20261115_2"></script>
+  <script src="js/app.js?v=20261115_2"></script>
 </body>
 
 </html>
